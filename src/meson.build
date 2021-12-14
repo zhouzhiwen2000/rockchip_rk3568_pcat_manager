@@ -9,4 +9,9 @@ pcat_headers = [
     'modem-manager.h'
 ]
 
-executable('pcat-manager', pcat_sources, dependencies : pcat_deps)
+executable('pcat-manager',
+    pcat_sources,
+    pcat_headers,
+    install: true,
+    dependencies : pcat_deps
+)
