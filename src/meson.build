@@ -14,5 +14,5 @@ executable('pcat-manager',
     pcat_sources,
     pcat_headers,
     install: true,
-    dependencies : [glib2_deps, gthread2_deps, libusb_deps, jsonc_deps, gpiod_deps]
+    dependencies : [glib2_deps, gthread2_deps, libusb1_deps, jsonc_deps, gpiod_deps]
 )
