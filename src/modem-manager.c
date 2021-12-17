@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <errno.h>
 #include <gpiod.h>
-#include <usb.h>
+#include <libusb.h>
 #include "modem-manager.h"
 #include "common.h"
 
