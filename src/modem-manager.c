@@ -163,7 +163,7 @@ static inline gboolean pcat_modem_manager_modem_power_init(
         main_config_data->hw_gpio_modem_power_active_low ? 0 : 1);
     gpiod_line_request_output(mm_data->gpio_modem_rf_kill_line,
         "gpio-modem-rf-kill",
-        main_config_data->hw_gpio_modem_rf_kill_active_low ? 0 : 1);
+        main_config_data->hw_gpio_modem_rf_kill_active_low ? 1 : 0);
     gpiod_line_request_output(mm_data->gpio_modem_reset_line,
         "gpio-modem-reset",
         main_config_data->hw_gpio_modem_reset_active_low ? 1 : 0);
