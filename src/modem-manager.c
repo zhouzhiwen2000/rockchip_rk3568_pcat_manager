@@ -66,6 +66,7 @@ static inline gboolean pcat_modem_manager_modem_power_init(
     PCatModemManagerData *mm_data, PCatManagerMainConfigData *main_config_data)
 {
     guint i;
+    gint ret;
 
     g_message("Start Modem power initialization.");
 
@@ -137,10 +138,16 @@ static inline gboolean pcat_modem_manager_modem_power_init(
 
             return FALSE;
         }
-
-        gpiod_line_request_output(mm_data->gpio_modem_power_line,
+    }
+    if(!gpiod_line_is_requested(mm_data->gpio_modem_power_line))
+    {
+        ret = gpiod_line_request_output(mm_data->gpio_modem_power_line,
             "gpio-modem-power",
             main_config_data->hw_gpio_modem_power_active_low ? 1 : 0);
+        if(ret!=0)
+        {
+            g_warning("Failed to request output on Modem power GPIO!");
+        }
     }
     else
     {
@@ -159,10 +166,16 @@ static inline gboolean pcat_modem_manager_modem_power_init(
 
             return FALSE;
         }
-
-        gpiod_line_request_output(mm_data->gpio_modem_rf_kill_line,
+    }
+    if(!gpiod_line_is_requested(mm_data->gpio_modem_rf_kill_line))
+    {
+        ret = gpiod_line_request_output(mm_data->gpio_modem_rf_kill_line,
             "gpio-modem-rf-kill",
             main_config_data->hw_gpio_modem_rf_kill_active_low ? 0 : 1);
+        if(ret!=0)
+        {
+            g_warning("Failed to request output on Modem RF kill GPIO!");
+        }
     }
     else
     {
@@ -181,10 +194,16 @@ static inline gboolean pcat_modem_manager_modem_power_init(
 
             return FALSE;
         }
-
-        gpiod_line_request_output(mm_data->gpio_modem_reset_line,
+    }
+    if(!gpiod_line_is_requested(mm_data->gpio_modem_reset_line))
+    {
+        ret = gpiod_line_request_output(mm_data->gpio_modem_reset_line,
             "gpio-modem-reset",
             main_config_data->hw_gpio_modem_reset_active_low ? 1 : 0);
+        if(ret!=0)
+        {
+            g_warning("Failed to request output on Modem reset GPIO!");
+        }
     }
     else
     {
