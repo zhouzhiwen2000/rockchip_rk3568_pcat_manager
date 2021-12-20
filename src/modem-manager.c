@@ -6,7 +6,8 @@
 #include "modem-manager.h"
 #include "common.h"
 
-#define PCAT_MODEM_MANAGER_POWER_WAIT_TIME 30
+#define PCAT_MODEM_MANAGER_POWER_WAIT_TIME 10
+#define PCAT_MODEM_MANAGER_POWER_READY_TIME 30
 #define PCAT_MODEM_MANAGER_RESET_ON_TIME 10
 #define PCAT_MODEM_MANAGER_RESET_WAIT_TIME 30
 
@@ -22,14 +23,14 @@ typedef enum
     PCAT_MODEM_MANAGER_DEVICE_5G
 }PCatModemManagerDeviceType;
 
-typedef struct _PCatModemManagerUSBID
+typedef struct _PCatModemManagerUSBData
 {
     PCatModemManagerDeviceType device_type;
-    guint id_vendor;
-    guint id_product;
+    guint16 id_vendor;
+    guint16 id_product;
     const gchar *control_port;
     int control_port_baud;
-}PCatModemManagerUSBID;
+}PCatModemManagerUSBData;
 
 typedef struct _PCatModemManagerData
 {
@@ -49,13 +50,13 @@ typedef struct _PCatModemManagerData
     struct gpiod_line *gpio_modem_reset_line;
 }PCatModemManagerData;
 
-static PCatModemManagerUSBID g_pcat_modem_manager_supported_5g_list[] =
+static PCatModemManagerUSBData g_pcat_modem_manager_supported_5g_list[] =
 {
     {
         .device_type = PCAT_MODEM_MANAGER_DEVICE_5G,
         .id_vendor = 0x2C7C,
         .id_product = 0x0900,
-        .control_port = "/dev/ttyUSB2",
+        .control_port = "1.4",
         .control_port_baud = B115200
     }
 };
@@ -227,7 +228,7 @@ static inline gboolean pcat_modem_manager_modem_power_init(
     gpiod_line_set_value(mm_data->gpio_modem_reset_line,
         main_config_data->hw_gpio_modem_reset_active_low ? 1 : 0);
 
-    for(i=0;i<PCAT_MODEM_MANAGER_POWER_WAIT_TIME && mm_data->work_flag;i++)
+    for(i=0;i<PCAT_MODEM_MANAGER_POWER_READY_TIME && mm_data->work_flag;i++)
     {
         g_usleep(100000);
     }
@@ -265,7 +266,7 @@ static inline gboolean pcat_modem_manager_modem_power_init(
     return TRUE;
 }
 
-static void pcat_modem_manager_print_usb_devs()
+static void pcat_modem_manager_scan_usb_devs(PCatModemManagerData *mm_data)
 {
     libusb_device *dev;
     int i = 0, j = 0;
@@ -273,8 +274,10 @@ static void pcat_modem_manager_print_usb_devs()
     ssize_t cnt;
     struct libusb_device_descriptor desc;
     int r;
-
     libusb_device **devs = NULL;
+    const PCatModemManagerUSBData *usb_data;
+    guint uc;
+    gboolean detected;
 
     cnt = libusb_get_device_list(NULL, &devs);
     if(cnt < 0)
@@ -282,15 +285,54 @@ static void pcat_modem_manager_print_usb_devs()
         return;
     }
 
-    while ((dev = devs[i++]) != NULL)
+    for(;devs[i]!=NULL;i++)
     {
+        detected = FALSE;
+        dev = devs[i];
+
         r = libusb_get_device_descriptor(dev, &desc);
-        if (r < 0)
+        if(r < 0)
         {
-            fprintf(stderr, "failed to get device descriptor");
-            return;
+            g_warning("Failed to get USB device descriptor!");
+
+            continue;
         }
 
+        for(uc=0;uc < sizeof(g_pcat_modem_manager_supported_5g_list) /
+            sizeof(PCatModemManagerUSBData);uc++)
+        {
+            usb_data = &(g_pcat_modem_manager_supported_5g_list[uc]);
+
+            if(usb_data->id_vendor==desc.idVendor &&
+               usb_data->id_product==desc.idProduct)
+            {
+                detected = TRUE;
+                break;
+            }
+
+        }
+
+        if(!detected)
+        {
+            continue;
+        }
+
+        switch(usb_data->device_type)
+        {
+            case PCAT_MODEM_MANAGER_DEVICE_5G:
+            {
+                break;
+            }
+            case PCAT_MODEM_MANAGER_DEVICE_LTE:
+            {
+                break;
+            }
+            default:
+            {
+                break;
+            }
+        }
+#if 0
         printf("%04x:%04x (bus %d, device %d)",
             desc.idVendor, desc.idProduct,
             libusb_get_bus_number(dev), libusb_get_device_address(dev));
@@ -303,6 +345,7 @@ static void pcat_modem_manager_print_usb_devs()
                 printf(".%d", path[j]);
         }
         printf("\n");
+#endif
     }
 
     libusb_free_device_list(devs, 1);
@@ -343,7 +386,7 @@ static gpointer pcat_modem_manager_modem_work_thread_func(
 
             case PCAT_MODEM_MANAGER_STATE_READY:
             {
-                pcat_modem_manager_print_usb_devs();
+                pcat_modem_manager_scan_usb_devs(mm_data);
 
                 g_usleep(1000000); /* WIP */
 
