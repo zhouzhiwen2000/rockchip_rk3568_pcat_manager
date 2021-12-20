@@ -137,6 +137,15 @@ static inline gboolean pcat_modem_manager_modem_power_init(
 
             return FALSE;
         }
+
+        gpiod_line_request_output(mm_data->gpio_modem_power_line,
+            "gpio-modem-power",
+            main_config_data->hw_gpio_modem_power_active_low ? 1 : 0);
+    }
+    else
+    {
+        gpiod_line_set_value(mm_data->gpio_modem_power_line,
+            main_config_data->hw_gpio_modem_power_active_low ? 1 : 0);
     }
 
     if(mm_data->gpio_modem_rf_kill_line==NULL)
@@ -150,6 +159,15 @@ static inline gboolean pcat_modem_manager_modem_power_init(
 
             return FALSE;
         }
+
+        gpiod_line_request_output(mm_data->gpio_modem_rf_kill_line,
+            "gpio-modem-rf-kill",
+            main_config_data->hw_gpio_modem_rf_kill_active_low ? 0 : 1);
+    }
+    else
+    {
+        gpiod_line_set_value(mm_data->gpio_modem_rf_kill_line,
+            main_config_data->hw_gpio_modem_rf_kill_active_low ? 0 : 1);
     }
 
     if(mm_data->gpio_modem_reset_line==NULL)
@@ -163,14 +181,16 @@ static inline gboolean pcat_modem_manager_modem_power_init(
 
             return FALSE;
         }
-    }
 
-    gpiod_line_request_output(mm_data->gpio_modem_power_line,
-        "gpio-modem-power",
-        main_config_data->hw_gpio_modem_power_active_low ? 1 : 0);
-    gpiod_line_request_output(mm_data->gpio_modem_rf_kill_line,
-        "gpio-modem-rf-kill",
-        main_config_data->hw_gpio_modem_rf_kill_active_low ? 0 : 1);
+        gpiod_line_request_output(mm_data->gpio_modem_reset_line,
+            "gpio-modem-reset",
+            main_config_data->hw_gpio_modem_reset_active_low ? 1 : 0);
+    }
+    else
+    {
+        gpiod_line_set_value(mm_data->gpio_modem_reset_line,
+            main_config_data->hw_gpio_modem_reset_active_low ? 1 : 0);
+    }
 
     for(i=0;i<PCAT_MODEM_MANAGER_POWER_WAIT_TIME && mm_data->work_flag;i++)
     {
@@ -181,14 +201,11 @@ static inline gboolean pcat_modem_manager_modem_power_init(
         return FALSE;
     }
 
-    gpiod_line_request_output(mm_data->gpio_modem_power_line,
-        "gpio-modem-power",
+    gpiod_line_set_value(mm_data->gpio_modem_power_line,
         main_config_data->hw_gpio_modem_power_active_low ? 0 : 1);
-    gpiod_line_request_output(mm_data->gpio_modem_rf_kill_line,
-        "gpio-modem-rf-kill",
+    gpiod_line_set_value(mm_data->gpio_modem_rf_kill_line,
         main_config_data->hw_gpio_modem_rf_kill_active_low ? 1 : 0);
-    gpiod_line_request_output(mm_data->gpio_modem_reset_line,
-        "gpio-modem-reset",
+    gpiod_line_set_value(mm_data->gpio_modem_reset_line,
         main_config_data->hw_gpio_modem_reset_active_low ? 1 : 0);
 
     for(i=0;i<PCAT_MODEM_MANAGER_POWER_WAIT_TIME && mm_data->work_flag;i++)
@@ -200,8 +217,7 @@ static inline gboolean pcat_modem_manager_modem_power_init(
         return FALSE;
     }
 
-    gpiod_line_request_output(mm_data->gpio_modem_reset_line,
-        "gpio-modem-reset",
+    gpiod_line_set_value(mm_data->gpio_modem_reset_line,
         main_config_data->hw_gpio_modem_reset_active_low ? 0 : 1);
 
     for(i=0;i<PCAT_MODEM_MANAGER_RESET_ON_TIME && mm_data->work_flag;i++)
@@ -213,8 +229,7 @@ static inline gboolean pcat_modem_manager_modem_power_init(
         return FALSE;
     }
 
-    gpiod_line_request_output(mm_data->gpio_modem_reset_line,
-        "gpio-modem-reset",
+    gpiod_line_set_value(mm_data->gpio_modem_reset_line,
         main_config_data->hw_gpio_modem_reset_active_low ? 1 : 0);
 
     for(i=0;i<PCAT_MODEM_MANAGER_RESET_WAIT_TIME && mm_data->work_flag;i++)
