@@ -1,4 +1,5 @@
 #include "pmu-manager.h"
+#include "common.h"
 
 gboolean pcat_pmu_manager_init()
 {

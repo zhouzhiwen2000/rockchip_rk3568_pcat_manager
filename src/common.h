@@ -3,6 +3,8 @@
 
 #include <glib.h>
 
+G_BEGIN_DECLS
+
 typedef struct _PCatManagerMainConfigData
 {
     gboolean valid;
@@ -22,6 +24,8 @@ typedef struct _PCatManagerMainConfigData
 }PCatManagerMainConfigData;
 
 PCatManagerMainConfigData *pcat_manager_main_config_data_get();
+
+G_END_DECLS
 
 #endif
 

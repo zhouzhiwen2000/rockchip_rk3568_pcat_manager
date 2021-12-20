@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <errno.h>
+#include <termios.h>
 #include <gpiod.h>
 #include <libusb.h>
 #include "modem-manager.h"
@@ -26,6 +27,8 @@ typedef struct _PCatModemManagerUSBID
     PCatModemManagerDeviceType device_type;
     guint id_vendor;
     guint id_product;
+    const gchar *control_port;
+    int control_port_baud;
 }PCatModemManagerUSBID;
 
 typedef struct _PCatModemManagerData
@@ -35,6 +38,8 @@ typedef struct _PCatModemManagerData
     GMutex mutex;
     PCatModemManagerState state;
     GThread *modem_work_thread;
+
+    libusb_context *usb_ctx;
 
     struct gpiod_chip *gpio_modem_power_chip;
     struct gpiod_chip *gpio_modem_rf_kill_chip;
@@ -49,7 +54,9 @@ static PCatModemManagerUSBID g_pcat_modem_manager_supported_5g_list[] =
     {
         .device_type = PCAT_MODEM_MANAGER_DEVICE_5G,
         .id_vendor = 0x2C7C,
-        .id_product = 0x0900
+        .id_product = 0x0900,
+        .control_port = "/dev/ttyUSB2",
+        .control_port_baud = B115200
     }
 };
 
@@ -208,6 +215,49 @@ static inline gboolean pcat_modem_manager_modem_power_init(
     return TRUE;
 }
 
+static void pcat_modem_manager_print_usb_devs()
+{
+    libusb_device *dev;
+    int i = 0, j = 0;
+    uint8_t path[8];
+    ssize_t cnt;
+    struct libusb_device_descriptor desc;
+    int r;
+
+    libusb_device **devs = NULL;
+
+    cnt = libusb_get_device_list(NULL, &devs);
+    if(cnt < 0)
+    {
+        return;
+    }
+
+    while ((dev = devs[i++]) != NULL)
+    {
+        r = libusb_get_device_descriptor(dev, &desc);
+        if (r < 0)
+        {
+            fprintf(stderr, "failed to get device descriptor");
+            return;
+        }
+
+        printf("%04x:%04x (bus %d, device %d)",
+            desc.idVendor, desc.idProduct,
+            libusb_get_bus_number(dev), libusb_get_device_address(dev));
+
+        r = libusb_get_port_numbers(dev, path, sizeof(path));
+        if (r > 0)
+        {
+            printf(" path: %d", path[0]);
+            for (j = 1; j < r; j++)
+                printf(".%d", path[j]);
+        }
+        printf("\n");
+    }
+
+    libusb_free_device_list(devs, 1);
+}
+
 static gpointer pcat_modem_manager_modem_work_thread_func(
     gpointer user_data)
 {
@@ -243,6 +293,8 @@ static gpointer pcat_modem_manager_modem_work_thread_func(
 
             case PCAT_MODEM_MANAGER_STATE_READY:
             {
+                pcat_modem_manager_print_usb_devs();
+
                 g_usleep(1000000); /* WIP */
 
                 break;
@@ -292,6 +344,8 @@ static gpointer pcat_modem_manager_modem_work_thread_func(
 
 gboolean pcat_modem_manager_init()
 {
+    int errcode;
+
     if(g_pcat_modem_manager_data.initialized)
     {
         g_message("Modem Manager is already initialized!");
@@ -301,6 +355,13 @@ gboolean pcat_modem_manager_init()
 
     g_pcat_modem_manager_data.work_flag = TRUE;
     g_mutex_init(&(g_pcat_modem_manager_data.mutex));
+
+    errcode = libusb_init(&g_pcat_modem_manager_data.usb_ctx);
+    if(errcode!=0)
+    {
+        g_warning("Failed to initialize libusb: %s, 5G modem may not work!",
+            libusb_strerror(errcode));
+    }
 
     g_pcat_modem_manager_data.modem_work_thread = g_thread_new(
         "pcat-modem-manager-work-thread",
@@ -323,6 +384,12 @@ void pcat_modem_manager_uninit()
     }
 
     g_mutex_clear(&(g_pcat_modem_manager_data.mutex));
+
+    if(g_pcat_modem_manager_data.usb_ctx!=NULL)
+    {
+        libusb_exit(g_pcat_modem_manager_data.usb_ctx);
+        g_pcat_modem_manager_data.usb_ctx = NULL;
+    }
 
     g_pcat_modem_manager_data.initialized = FALSE;
 }
