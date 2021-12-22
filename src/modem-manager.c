@@ -3,6 +3,7 @@
 #include <termios.h>
 #include <gpiod.h>
 #include <libusb.h>
+#include <gio/gio.h>
 #include "modem-manager.h"
 #include "common.h"
 
@@ -19,6 +20,7 @@ typedef enum
 
 typedef enum
 {
+    PCAT_MODEM_MANAGER_DEVICE_ALL,
     PCAT_MODEM_MANAGER_DEVICE_LTE,
     PCAT_MODEM_MANAGER_DEVICE_5G
 }PCatModemManagerDeviceType;
@@ -28,8 +30,8 @@ typedef struct _PCatModemManagerUSBData
     PCatModemManagerDeviceType device_type;
     guint16 id_vendor;
     guint16 id_product;
-    const gchar *control_port;
-    int control_port_baud;
+    const gchar *external_control_exec;
+    gboolean external_control_exec_is_daemon;
 }PCatModemManagerUSBData;
 
 typedef struct _PCatModemManagerData
@@ -48,16 +50,18 @@ typedef struct _PCatModemManagerData
     struct gpiod_line *gpio_modem_power_line;
     struct gpiod_line *gpio_modem_rf_kill_line;
     struct gpiod_line *gpio_modem_reset_line;
+
+    GSubprocess *external_control_exec_process;
 }PCatModemManagerData;
 
 static PCatModemManagerUSBData g_pcat_modem_manager_supported_5g_list[] =
 {
     {
-        .device_type = PCAT_MODEM_MANAGER_DEVICE_5G,
+        .device_type = PCAT_MODEM_MANAGER_DEVICE_ALL,
         .id_vendor = 0x2C7C,
-        .id_product = 0x0900,
-        .control_port = "1.4",
-        .control_port_baud = B115200
+        .id_product = 0,
+        .external_control_exec = "quectel-cm",
+        .external_control_exec_is_daemon = FALSE
     }
 };
 
@@ -266,11 +270,32 @@ static inline gboolean pcat_modem_manager_modem_power_init(
     return TRUE;
 }
 
+static void pcat_modem_manager_external_control_exec_wait_func(
+    GObject *source_object, GAsyncResult *res, gpointer user_data)
+{
+    GError *error = NULL;
+    PCatModemManagerData *mm_data = (PCatModemManagerData *)user_data;
+
+    if(g_subprocess_wait_check_finish(G_SUBPROCESS(source_object), res,
+        &error))
+    {
+        g_message("External control process exits normally.");
+    }
+    else
+    {
+        g_warning("External control process exits with error: %s",
+            error->message!=NULL ? error->message : "Unknown");
+        g_clear_error(&error);
+    }
+
+    g_object_unref(mm_data->external_control_exec_process);
+    mm_data->external_control_exec_process = NULL;
+}
+
 static void pcat_modem_manager_scan_usb_devs(PCatModemManagerData *mm_data)
 {
     libusb_device *dev;
-    int i = 0, j = 0;
-    uint8_t path[8];
+    guint i;
     ssize_t cnt;
     struct libusb_device_descriptor desc;
     int r;
@@ -278,6 +303,7 @@ static void pcat_modem_manager_scan_usb_devs(PCatModemManagerData *mm_data)
     const PCatModemManagerUSBData *usb_data;
     guint uc;
     gboolean detected;
+    GError *error = NULL;
 
     cnt = libusb_get_device_list(NULL, &devs);
     if(cnt < 0)
@@ -285,7 +311,7 @@ static void pcat_modem_manager_scan_usb_devs(PCatModemManagerData *mm_data)
         return;
     }
 
-    for(;devs[i]!=NULL;i++)
+    for(i=0;devs[i]!=NULL;i++)
     {
         detected = FALSE;
         dev = devs[i];
@@ -304,12 +330,12 @@ static void pcat_modem_manager_scan_usb_devs(PCatModemManagerData *mm_data)
             usb_data = &(g_pcat_modem_manager_supported_5g_list[uc]);
 
             if(usb_data->id_vendor==desc.idVendor &&
-               usb_data->id_product==desc.idProduct)
+               (usb_data->id_product==0 ||
+                usb_data->id_product==desc.idProduct))
             {
                 detected = TRUE;
                 break;
             }
-
         }
 
         if(!detected)
@@ -327,25 +353,49 @@ static void pcat_modem_manager_scan_usb_devs(PCatModemManagerData *mm_data)
             {
                 break;
             }
+            case PCAT_MODEM_MANAGER_DEVICE_ALL:
+            {
+                break;
+            }
             default:
             {
                 break;
             }
         }
-#if 0
-        printf("%04x:%04x (bus %d, device %d)",
-            desc.idVendor, desc.idProduct,
-            libusb_get_bus_number(dev), libusb_get_device_address(dev));
 
-        r = libusb_get_port_numbers(dev, path, sizeof(path));
-        if (r > 0)
+        if(usb_data->external_control_exec!=NULL)
         {
-            printf(" path: %d", path[0]);
-            for (j = 1; j < r; j++)
-                printf(".%d", path[j]);
+            if(!usb_data->external_control_exec_is_daemon)
+            {
+                if(mm_data->external_control_exec_process==NULL)
+                {
+                    mm_data->external_control_exec_process = g_subprocess_new(
+                        G_SUBPROCESS_FLAGS_STDOUT_SILENCE |
+                        G_SUBPROCESS_FLAGS_STDERR_SILENCE, &error,
+                        usb_data->external_control_exec, NULL);
+                    if(mm_data->external_control_exec_process!=NULL)
+                    {
+                        g_subprocess_wait_async(
+                            mm_data->external_control_exec_process, NULL,
+                            pcat_modem_manager_external_control_exec_wait_func,
+                            mm_data);
+                    }
+                    else
+                    {
+                        g_warning("Failed to run external modem control "
+                            "executable file %s: %s",
+                            usb_data->external_control_exec,
+                            error!=NULL ? error->message: "Unknown");
+                        g_clear_error(&error);
+                    }
+
+                }
+            }
+            else
+            {
+                /* TODO: Run external control exec as daemon. */
+            }
         }
-        printf("\n");
-#endif
     }
 
     libusb_free_device_list(devs, 1);
@@ -398,6 +448,14 @@ static gpointer pcat_modem_manager_modem_work_thread_func(
                 break;
             }
         }
+    }
+
+    if(mm_data->external_control_exec_process!=NULL)
+    {
+        g_subprocess_force_exit(mm_data->external_control_exec_process);
+        g_subprocess_wait(mm_data->external_control_exec_process, NULL, NULL);
+        g_object_unref(mm_data->external_control_exec_process);
+        mm_data->external_control_exec_process = NULL;
     }
 
     if(mm_data->gpio_modem_reset_line!=NULL)
