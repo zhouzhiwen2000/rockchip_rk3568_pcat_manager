@@ -52,7 +52,7 @@ typedef struct _PCatModemManagerData
     GThread *modem_work_thread;
     GHashTable *modem_mode_table;
     PCatModemManagerMode modem_mode;
-    guint modem_signal_strength;
+    gint modem_signal_strength;
 
     libusb_context *usb_ctx;
 
@@ -297,8 +297,8 @@ static inline void pcat_modem_manager_external_control_exec_line_parser(
     gchar **fields, **values;
     GHashTable *table;
     const gchar *cmd, *smode, *signal_raw_str;
-    guint signal_raw;
-    guint signal_value;
+    gint signal_raw;
+    gint signal_value;
 
     g_string_append_len(str, (const gchar *)buffer, size);
 
@@ -344,7 +344,7 @@ static inline void pcat_modem_manager_external_control_exec_line_parser(
                         signal_raw_str = g_hash_table_lookup(table, "RSSI");
                         if(signal_raw_str!=NULL)
                         {
-                            if(sscanf(signal_raw_str, "%u", &signal_raw)>0)
+                            if(sscanf(signal_raw_str, "%d", &signal_raw)>0)
                             {
                                 if(signal_raw >= 0)
                                 {
@@ -362,7 +362,7 @@ static inline void pcat_modem_manager_external_control_exec_line_parser(
                         signal_raw_str = g_hash_table_lookup(table, "RSRQ");
                         if(signal_raw_str!=NULL)
                         {
-                            if(sscanf(signal_raw_str, "%u", &signal_raw)>0)
+                            if(sscanf(signal_raw_str, "%d", &signal_raw)>0)
                             {
                                 if(signal_raw >= -10)
                                 {
@@ -380,7 +380,7 @@ static inline void pcat_modem_manager_external_control_exec_line_parser(
                         signal_raw_str = g_hash_table_lookup(table, "RSRP");
                         if(signal_raw_str!=NULL)
                         {
-                            if(sscanf(signal_raw_str, "%u", &signal_raw)>0)
+                            if(sscanf(signal_raw_str, "%d", &signal_raw)>0)
                             {
                                 if(signal_raw >= -80)
                                 {
@@ -398,7 +398,7 @@ static inline void pcat_modem_manager_external_control_exec_line_parser(
                         signal_raw_str = g_hash_table_lookup(table, "RSCP");
                         if(signal_raw_str!=NULL)
                         {
-                            if(sscanf(signal_raw_str, "%u", &signal_raw)>0)
+                            if(sscanf(signal_raw_str, "%d", &signal_raw)>0)
                             {
                                 if(signal_raw >= -60)
                                 {
@@ -417,7 +417,7 @@ static inline void pcat_modem_manager_external_control_exec_line_parser(
                 }
 
                 mm_data->modem_signal_strength = signal_value;
-                g_message("Modem signal strength: %u", signal_value);
+                g_message("Modem signal strength: %d", signal_value);
 
                 g_hash_table_unref(table);
             }
