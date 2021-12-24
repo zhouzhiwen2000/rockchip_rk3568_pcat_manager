@@ -414,10 +414,10 @@ static inline void pcat_modem_manager_external_control_exec_line_parser(
                         }
                     }
                     G_STMT_END;
-                }
 
-                mm_data->modem_signal_strength = signal_value;
-                g_message("Modem signal strength: %d", signal_value);
+                    mm_data->modem_signal_strength = signal_value;
+                    g_message("Modem signal strength: %d", signal_value);
+                }
 
                 g_hash_table_unref(table);
             }
