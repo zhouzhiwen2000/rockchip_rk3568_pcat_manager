@@ -302,10 +302,19 @@ static inline void pcat_modem_manager_external_control_exec_line_parser(
 
     g_string_append_len(str, (const gchar *)buffer, size);
 
+    if(str->len > 1048576)
+    {
+        str->len = 0;
+    }
+
+    g_message("STDOUT DATA: %s", str->str);
+
     for(i=0;i<str->len;i++)
     {
         if(str->str[i]=='\n')
         {
+            str->str[i] = '\0';
+
             fields = g_strsplit(start, ",", -1);
 
             if(fields!=NULL)
