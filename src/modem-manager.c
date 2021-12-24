@@ -538,6 +538,8 @@ static inline gboolean pcat_modem_manager_run_external_exec(
                     G_SOURCE_FUNC(
                     pcat_modem_manager_external_control_exec_stdout_watch_func),
                     mm_data, NULL);
+                g_source_attach(
+                    mm_data->external_control_exec_stdout_read_source, NULL);
             }
 
             g_subprocess_wait_async(
