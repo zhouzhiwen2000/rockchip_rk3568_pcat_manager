@@ -307,8 +307,6 @@ static inline void pcat_modem_manager_external_control_exec_line_parser(
         str->len = 0;
     }
 
-    g_message("STDOUT DATA: %s", str->str);
-
     for(i=0;i<str->len;i++)
     {
         if(str->str[i]=='\n')
