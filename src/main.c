@@ -108,6 +108,11 @@ static gboolean pcat_main_config_data_load()
         "SerialBaud", NULL);
     g_pcat_manager_main_config_data.pm_serial_baud = ivalue;
 
+    ivalue = g_key_file_get_integer(keyfile, "Debug",
+        "ModemExternalExecStdoutLog", NULL);
+    g_pcat_manager_main_config_data.debug_modem_external_exec_stdout_log =
+        ivalue;
+
     g_key_file_unref(keyfile);
 
     g_pcat_manager_main_config_data.valid = TRUE;

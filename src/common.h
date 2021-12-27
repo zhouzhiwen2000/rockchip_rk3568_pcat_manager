@@ -21,6 +21,8 @@ typedef struct _PCatManagerMainConfigData
 
     gchar *pm_serial_device;
     guint pm_serial_baud;
+
+    gboolean debug_modem_external_exec_stdout_log;
 }PCatManagerMainConfigData;
 
 PCatManagerMainConfigData *pcat_manager_main_config_data_get();

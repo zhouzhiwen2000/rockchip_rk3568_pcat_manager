@@ -34,6 +34,16 @@ typedef enum
     PCAT_MODEM_MANAGER_MODE_5G
 }PCatModemManagerMode;
 
+typedef enum {
+    PCAT_MODEM_MANAGER_SIM_STATE_ABSENT = 0,
+    PCAT_MODEM_MANAGER_SIM_STATE_NOT_READY = 1,
+    PCAT_MODEM_MANAGER_SIM_STATE_READY = 2,
+    PCAT_MODEM_MANAGER_SIM_STATE_PIN = 3,
+    PCAT_MODEM_MANAGER_SIM_STATE_PUK = 4,
+    PCAT_MODEM_MANAGER_SIM_STATE_NETWORK_PERSONALIZATION = 5,
+    PCAT_MODEM_MANAGER_SIM_STATE_BAD = 6,
+}PCatModemManagerSIMState;
+
 typedef struct _PCatModemManagerUSBData
 {
     PCatModemManagerDeviceType device_type;
@@ -53,6 +63,7 @@ typedef struct _PCatModemManagerData
     GHashTable *modem_mode_table;
     PCatModemManagerMode modem_mode;
     gint modem_signal_strength;
+    PCatModemManagerSIMState sim_state;
 
     libusb_context *usb_ctx;
 
@@ -67,6 +78,8 @@ typedef struct _PCatModemManagerData
     GInputStream *external_control_exec_stdout_stream;
     GSource *external_control_exec_stdout_read_source;
     GString *external_control_exec_stdout_buffer;
+
+    FILE *external_control_exec_stdout_log_file;
 }PCatModemManagerData;
 
 static PCatModemManagerUSBData g_pcat_modem_manager_supported_5g_list[] =
@@ -296,9 +309,17 @@ static inline void pcat_modem_manager_external_control_exec_line_parser(
     const gchar *start = str->str;
     gchar **fields, **values;
     GHashTable *table;
-    const gchar *cmd, *smode, *signal_raw_str;
+    const gchar *cmd, *smode, *value_raw_str;
     gint signal_raw;
     gint signal_value;
+    gint sim_state;
+
+    if(mm_data->external_control_exec_stdout_log_file!=NULL)
+    {
+        fwrite(buffer, size, 1,
+            mm_data->external_control_exec_stdout_log_file);
+        fflush(mm_data->external_control_exec_stdout_log_file);
+    }
 
     g_string_append_len(str, (const gchar *)buffer, size);
 
@@ -348,10 +369,10 @@ static inline void pcat_modem_manager_external_control_exec_line_parser(
 
                     G_STMT_START
                     {
-                        signal_raw_str = g_hash_table_lookup(table, "RSSI");
-                        if(signal_raw_str!=NULL)
+                        value_raw_str = g_hash_table_lookup(table, "RSSI");
+                        if(value_raw_str!=NULL)
                         {
-                            if(sscanf(signal_raw_str, "%d", &signal_raw)>0)
+                            if(sscanf(value_raw_str, "%d", &signal_raw)>0)
                             {
                                 if(signal_raw >= 0)
                                 {
@@ -366,10 +387,10 @@ static inline void pcat_modem_manager_external_control_exec_line_parser(
                             }
                         }
 
-                        signal_raw_str = g_hash_table_lookup(table, "RSRQ");
-                        if(signal_raw_str!=NULL)
+                        value_raw_str = g_hash_table_lookup(table, "RSRQ");
+                        if(value_raw_str!=NULL)
                         {
-                            if(sscanf(signal_raw_str, "%d", &signal_raw)>0)
+                            if(sscanf(value_raw_str, "%d", &signal_raw)>0)
                             {
                                 if(signal_raw >= -10)
                                 {
@@ -384,10 +405,10 @@ static inline void pcat_modem_manager_external_control_exec_line_parser(
                             }
                         }
 
-                        signal_raw_str = g_hash_table_lookup(table, "RSRP");
-                        if(signal_raw_str!=NULL)
+                        value_raw_str = g_hash_table_lookup(table, "RSRP");
+                        if(value_raw_str!=NULL)
                         {
-                            if(sscanf(signal_raw_str, "%d", &signal_raw)>0)
+                            if(sscanf(value_raw_str, "%d", &signal_raw)>0)
                             {
                                 if(signal_raw >= -80)
                                 {
@@ -402,10 +423,10 @@ static inline void pcat_modem_manager_external_control_exec_line_parser(
                             }
                         }
 
-                        signal_raw_str = g_hash_table_lookup(table, "RSCP");
-                        if(signal_raw_str!=NULL)
+                        value_raw_str = g_hash_table_lookup(table, "RSCP");
+                        if(value_raw_str!=NULL)
                         {
-                            if(sscanf(signal_raw_str, "%d", &signal_raw)>0)
+                            if(sscanf(value_raw_str, "%d", &signal_raw)>0)
                             {
                                 if(signal_raw >= -60)
                                 {
@@ -424,6 +445,22 @@ static inline void pcat_modem_manager_external_control_exec_line_parser(
 
                     mm_data->modem_signal_strength = signal_value;
                     g_message("Modem signal strength: %d", signal_value);
+                }
+                else if(g_strcmp0(cmd, "SIMSTATUS")==0)
+                {
+                    value_raw_str = g_hash_table_lookup(table, "STATE");
+
+                    if(value_raw_str!=NULL)
+                    {
+                        if(sscanf(value_raw_str, "%d", &sim_state) > 0)
+                        {
+                            mm_data->sim_state = sim_state;
+
+                            g_message("SIM card state changed to %d.",
+                                sim_state);
+                        }
+
+                    }
                 }
 
                 g_hash_table_unref(table);
@@ -515,7 +552,7 @@ static inline gboolean pcat_modem_manager_run_external_exec(
 
             mm_data->external_control_exec_process = g_subprocess_new(
                 G_SUBPROCESS_FLAGS_STDOUT_PIPE |
-                G_SUBPROCESS_FLAGS_STDERR_SILENCE, &error,
+                G_SUBPROCESS_FLAGS_STDERR_MERGE, &error,
                 usb_data->external_control_exec, NULL);
             if(mm_data->external_control_exec_process==NULL)
             {
@@ -736,6 +773,7 @@ static gpointer pcat_modem_manager_modem_work_thread_func(
 gboolean pcat_modem_manager_init()
 {
     int errcode;
+    PCatManagerMainConfigData *main_config_data;
 
     if(g_pcat_modem_manager_data.initialized)
     {
@@ -743,6 +781,8 @@ gboolean pcat_modem_manager_init()
 
         return TRUE;
     }
+
+    main_config_data = pcat_manager_main_config_data_get();
 
     g_pcat_modem_manager_data.work_flag = TRUE;
     g_mutex_init(&(g_pcat_modem_manager_data.mutex));
@@ -766,6 +806,12 @@ gboolean pcat_modem_manager_init()
     g_hash_table_insert(g_pcat_modem_manager_data.modem_mode_table,
         "CDMA", GUINT_TO_POINTER(PCAT_MODEM_MANAGER_MODE_2G));
 
+    if(main_config_data->debug_modem_external_exec_stdout_log)
+    {
+        g_pcat_modem_manager_data.external_control_exec_stdout_log_file =
+            fopen("/tmp/pcat-modem-external-exec-stdout.log", "w+");
+    }
+
     errcode = libusb_init(&g_pcat_modem_manager_data.usb_ctx);
     if(errcode!=0)
     {
@@ -788,6 +834,11 @@ gboolean pcat_modem_manager_init()
 
 void pcat_modem_manager_uninit()
 {
+    if(!g_pcat_modem_manager_data.initialized)
+    {
+        return;
+    }
+
     g_pcat_modem_manager_data.work_flag = FALSE;
 
     if(g_pcat_modem_manager_data.modem_work_thread!=NULL)
@@ -810,6 +861,14 @@ void pcat_modem_manager_uninit()
             g_pcat_modem_manager_data.external_control_exec_stdout_buffer,
             TRUE);
         g_pcat_modem_manager_data.external_control_exec_stdout_buffer = NULL;
+    }
+
+    if(g_pcat_modem_manager_data.external_control_exec_stdout_log_file!=NULL)
+    {
+        fclose(
+            g_pcat_modem_manager_data.external_control_exec_stdout_log_file);
+        g_pcat_modem_manager_data.external_control_exec_stdout_log_file =
+            NULL;
     }
 
     g_pcat_modem_manager_data.initialized = FALSE;
