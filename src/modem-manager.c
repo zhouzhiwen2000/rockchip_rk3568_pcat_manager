@@ -671,8 +671,17 @@ static void pcat_modem_manager_scan_usb_devs(PCatModemManagerData *mm_data)
                 break;
             }
         }
-
-        pcat_modem_manager_run_external_exec(mm_data, usb_data);
+        if(usb_data->external_control_exec!=NULL)
+        {
+            g_spawn_command_line_async("ModemManagerSwitch.sh disable",
+                NULL);
+            pcat_modem_manager_run_external_exec(mm_data, usb_data);
+        }
+        else
+        {
+            g_spawn_command_line_async("ModemManagerSwitch.sh enable",
+                NULL);
+        }
     }
 
     libusb_free_device_list(devs, 1);
