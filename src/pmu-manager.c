@@ -217,6 +217,12 @@ static void pcat_pmu_serial_read_data_parse(PCatPMUManagerData *pmu_data)
             }
             if(expect_len + 10 > remaining_size)
             {
+                if(used_size > 0)
+                {
+                    g_byte_array_remove_range(
+                        pmu_data->serial_read_buffer, 0, used_size);
+                }
+
                 return;
             }
 
@@ -305,6 +311,8 @@ static gboolean pcat_pmu_serial_read_watch_func(GIOChannel *source,
             g_byte_array_remove_range(pmu_data->serial_read_buffer, 0,
                 pmu_data->serial_read_buffer->len - 65536);
         }
+
+        g_debug("PMU serial read size %ld", (long)rsize);
 
         pcat_pmu_serial_read_data_parse(pmu_data);
     }
