@@ -210,7 +210,7 @@ static void pcat_pmu_serial_read_data_parse(PCatPMUManagerData *pmu_data)
             }
 
             expect_len = p[5] + ((guint16)p[6] << 8);
-            if(expect_len < 3 || expect_len + 11 > remaining_size)
+            if(expect_len < 3 || expect_len + 10 > remaining_size)
             {
                 used_size = i;
                 continue;
@@ -353,6 +353,11 @@ static gboolean pcat_pmu_serial_open(PCatPMUManagerData *pmu_data)
         case 57600:
         {
             rspeed = B57600;
+            break;
+        }
+        case 115200:
+        {
+            rspeed = B115200;
             break;
         }
         default:
