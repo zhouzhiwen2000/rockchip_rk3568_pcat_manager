@@ -210,10 +210,14 @@ static void pcat_pmu_serial_read_data_parse(PCatPMUManagerData *pmu_data)
             }
 
             expect_len = p[5] + ((guint16)p[6] << 8);
-            if(expect_len < 3 || expect_len + 10 > remaining_size)
+            if(expect_len < 3 || expect_len > 65532)
             {
                 used_size = i;
                 continue;
+            }
+            if(expect_len + 10 > remaining_size)
+            {
+                return;
             }
 
             if(p[9+expect_len]!=0x5A)
