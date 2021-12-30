@@ -1,4 +1,5 @@
 #include <unistd.h>
+#include <signal.h>
 #include <glib.h>
 #include "common.h"
 #include "modem-manager.h"
@@ -145,6 +146,8 @@ int main(int argc, char *argv[])
     {
         daemon(0, 0);
     }
+
+    signal(SIGPIPE, SIG_IGN);
 
     g_pcat_main_loop = g_main_loop_new(NULL, FALSE);
 
