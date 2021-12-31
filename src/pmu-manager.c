@@ -104,6 +104,11 @@ static gboolean pcat_pmu_serial_write_watch_func(GIOChannel *source,
         }
     }
 
+    if(!ret)
+    {
+        pmu_data->serial_write_source = 0;
+    }
+
     return ret;
 }
 
