@@ -164,7 +164,7 @@ static void pcat_pmu_serial_write_data_request(
     g_byte_array_append(ba,
         need_ack ? (const guint8 *)"\x01" : (const guint8 *)"\x00", 1);
 
-    sv = pcat_pmu_serial_compute_crc16(ba->data + 7, dp_size);
+    sv = pcat_pmu_serial_compute_crc16(ba->data + 1, dp_size + 6);
     sv = GUINT16_TO_LE(sv);
     g_byte_array_append(ba, (const guint8 *)&sv, 2);
 
