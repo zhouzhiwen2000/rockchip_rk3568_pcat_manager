@@ -12,7 +12,12 @@
 typedef enum
 {
     PCAT_PMU_MANAGER_COMMAND_HEARTBEAT = 0x1,
-    PCAT_PMU_MANAGER_COMMAND_STATUS_REPORT = 0x7
+    PCAT_PMU_MANAGER_COMMAND_STATUS_REPORT = 0x7,
+    PCAT_PMU_MANAGER_COMMAND_STATUS_REPORT_ACK = 0x8,
+    PCAT_PMU_MANAGER_COMMAND_PMU_REQUEST_SHUTDOWN = 0xD,
+    PCAT_PMU_MANAGER_COMMAND_PMU_REQUEST_SHUTDOWN_ACK = 0xE,
+    PCAT_PMU_MANAGER_COMMAND_HOST_REQUEST_SHUTDOWN = 0xF,
+    PCAT_PMU_MANAGER_COMMAND_HOST_REQUEST_SHUTDOWN_ACK = 0x10
 }PCatPMUManagerCommandType;
 
 typedef struct _PCatPMUManagerData
@@ -28,6 +33,8 @@ typedef struct _PCatPMUManagerData
     GByteArray *serial_read_buffer;
     GByteArray *serial_write_buffer;
     guint16 serial_write_frame_num;
+
+    gboolean shutdown_process_completed;
 }PCatPMUManagerData;
 
 static PCatPMUManagerData g_pcat_pmu_manager_data = {0};
@@ -180,6 +187,12 @@ static void pcat_pmu_serial_write_data_request(
     }
 }
 
+static void pcat_pmu_serial_status_data_parse(PCatPMUManagerData *pmu_data,
+    const guint8 *data, guint len)
+{
+
+}
+
 static void pcat_pmu_serial_read_data_parse(PCatPMUManagerData *pmu_data)
 {
     guint i;
@@ -190,6 +203,8 @@ static void pcat_pmu_serial_read_data_parse(PCatPMUManagerData *pmu_data)
     guint16 checksum, rchecksum;
     guint16 command;
     guint8 src, dst;
+    gboolean need_ack;
+    guint16 frame_num;
 
     if(buffer->len < 13)
     {
@@ -247,6 +262,7 @@ static void pcat_pmu_serial_read_data_parse(PCatPMUManagerData *pmu_data)
 
             src = p[1];
             dst = p[2];
+            frame_num = p[3] + ((guint16)p[4] << 8);
 
             command = p[7] + ((guint16)p[8] << 8);
             extra_data_len = expect_len - 3;
@@ -258,6 +274,7 @@ static void pcat_pmu_serial_read_data_parse(PCatPMUManagerData *pmu_data)
             {
                 extra_data = NULL;
             }
+            need_ack = (p[6 + expect_len]!=0);
 
             g_debug("Got command %X from %X to %X.", command, src, dst);
 
@@ -271,6 +288,33 @@ static void pcat_pmu_serial_read_data_parse(PCatPMUManagerData *pmu_data)
                         {
                             break;
                         }
+
+                        pcat_pmu_serial_status_data_parse(pmu_data,
+                            extra_data, extra_data_len);
+
+                        if(need_ack)
+                        {
+                            pcat_pmu_serial_write_data_request(pmu_data,
+                                command+1, TRUE, frame_num, NULL, 0, FALSE);
+                        }
+
+                        break;
+                    }
+                    case PCAT_PMU_MANAGER_COMMAND_PMU_REQUEST_SHUTDOWN:
+                    {
+                        g_spawn_command_line_async("poweroff", NULL);
+
+                        if(need_ack)
+                        {
+                            pcat_pmu_serial_write_data_request(pmu_data,
+                                command+1, TRUE, frame_num, NULL, 0, FALSE);
+                        }
+
+                        break;
+                    }
+                    case PCAT_PMU_MANAGER_COMMAND_HOST_REQUEST_SHUTDOWN_ACK:
+                    {
+                        pmu_data->shutdown_process_completed = TRUE;
 
                         break;
                     }
@@ -311,8 +355,6 @@ static gboolean pcat_pmu_serial_read_watch_func(GIOChannel *source,
             g_byte_array_remove_range(pmu_data->serial_read_buffer, 0,
                 pmu_data->serial_read_buffer->len - 65536);
         }
-
-        g_debug("PMU serial read size %ld", (long)rsize);
 
         pcat_pmu_serial_read_data_parse(pmu_data);
     }
@@ -419,6 +461,9 @@ static gboolean pcat_pmu_serial_open(PCatPMUManagerData *pmu_data)
     pmu_data->serial_read_source = g_io_add_watch(channel,
         G_IO_IN, pcat_pmu_serial_read_watch_func, pmu_data);
 
+    g_message("Open PMU serial port %s successfully.",
+        main_config_data->pm_serial_device);
+
     return TRUE;
 }
 
@@ -523,3 +568,14 @@ void pcat_pmu_manager_uninit()
     g_pcat_pmu_manager_data.initialized = FALSE;
 }
 
+void pcat_pmu_manager_shutdown_request()
+{
+    pcat_pmu_serial_write_data_request(&g_pcat_pmu_manager_data,
+        PCAT_PMU_MANAGER_COMMAND_HOST_REQUEST_SHUTDOWN,
+        FALSE, 0, NULL, 0, TRUE);
+}
+
+gboolean pcat_pmu_manager_shutdown_completed()
+{
+    return g_pcat_pmu_manager_data.shutdown_process_completed;
+}

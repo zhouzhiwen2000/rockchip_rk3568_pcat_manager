@@ -1,6 +1,7 @@
 #include <unistd.h>
 #include <signal.h>
 #include <glib.h>
+#include <glib-unix.h>
 #include "common.h"
 #include "modem-manager.h"
 #include "pmu-manager.h"
@@ -10,6 +11,7 @@
 static gboolean g_pcat_cmd_daemonsize = FALSE;
 
 static GMainLoop *g_pcat_main_loop = NULL;
+static gboolean g_pcat_main_shutdown = FALSE;
 
 static PCatManagerMainConfigData g_pcat_manager_main_config_data = {0};
 
@@ -121,6 +123,30 @@ static gboolean pcat_main_config_data_load()
     return TRUE;
 }
 
+static gboolean pcat_main_shutdown_check_timeout_func(gpointer user_data)
+{
+    if(pcat_pmu_manager_shutdown_completed())
+    {
+        if(g_pcat_main_loop!=NULL)
+        {
+            g_main_loop_quit(g_pcat_main_loop);
+
+            return FALSE;
+        }
+    }
+
+    return TRUE;
+}
+
+static gboolean pcat_main_sigterm_func(gpointer user_data)
+{
+    g_message("SIGTERM detected.");
+
+    pcat_manager_main_request_shutdown();
+
+    return TRUE;
+}
+
 int main(int argc, char *argv[])
 {
     GError *error = NULL;
@@ -148,6 +174,7 @@ int main(int argc, char *argv[])
     }
 
     signal(SIGPIPE, SIG_IGN);
+    g_unix_signal_add(SIGTERM, pcat_main_sigterm_func, NULL);
 
     g_pcat_main_loop = g_main_loop_new(NULL, FALSE);
 
@@ -179,4 +206,17 @@ int main(int argc, char *argv[])
 PCatManagerMainConfigData *pcat_manager_main_config_data_get()
 {
     return &g_pcat_manager_main_config_data;
+}
+
+void pcat_manager_main_request_shutdown()
+{
+    if(g_pcat_main_shutdown)
+    {
+        return;
+    }
+
+    pcat_pmu_manager_shutdown_request();
+    g_timeout_add_seconds(1, pcat_main_shutdown_check_timeout_func, NULL);
+
+    g_pcat_main_shutdown = TRUE;
 }

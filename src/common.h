@@ -26,6 +26,7 @@ typedef struct _PCatManagerMainConfigData
 }PCatManagerMainConfigData;
 
 PCatManagerMainConfigData *pcat_manager_main_config_data_get();
+void pcat_manager_main_request_shutdown();
 
 G_END_DECLS
 
