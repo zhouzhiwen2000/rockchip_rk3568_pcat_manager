@@ -83,6 +83,11 @@ static gboolean pcat_pmu_serial_write_watch_func(GIOChannel *source,
 
     do
     {
+        if(pmu_data->serial_write_buffer->len <= total_write_size)
+        {
+            break;
+        }
+
         remaining_size = pmu_data->serial_write_buffer->len -
             total_write_size;
 
@@ -108,6 +113,10 @@ static gboolean pcat_pmu_serial_write_watch_func(GIOChannel *source,
         if(errno==EAGAIN)
         {
             ret = TRUE;
+        }
+        else
+        {
+            g_warning("Serial port write error: %s", strerror(errno));
         }
     }
 
