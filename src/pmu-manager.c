@@ -14,6 +14,8 @@ typedef enum
     PCAT_PMU_MANAGER_COMMAND_HEARTBEAT = 0x1,
     PCAT_PMU_MANAGER_COMMAND_STATUS_REPORT = 0x7,
     PCAT_PMU_MANAGER_COMMAND_STATUS_REPORT_ACK = 0x8,
+    PCAT_PMU_MANAGER_COMMAND_DATE_TIME_SYNC = 0x9,
+    PCAT_PMU_MANAGER_COMMAND_DATE_TIME_SYNC_ACK = 0xA,
     PCAT_PMU_MANAGER_COMMAND_PMU_REQUEST_SHUTDOWN = 0xD,
     PCAT_PMU_MANAGER_COMMAND_PMU_REQUEST_SHUTDOWN_ACK = 0xE,
     PCAT_PMU_MANAGER_COMMAND_HOST_REQUEST_SHUTDOWN = 0xF,
@@ -536,8 +538,11 @@ static gboolean pcat_pmu_manager_check_timeout_func(gpointer user_data)
         return TRUE;
     }
 
-    pcat_pmu_serial_write_data_request(pmu_data,
-        PCAT_PMU_MANAGER_COMMAND_HEARTBEAT, FALSE, 0, NULL, 0, FALSE);
+    if(!pmu_data->reboot_request && !pmu_data->shutdown_request)
+    {
+        pcat_pmu_serial_write_data_request(pmu_data,
+            PCAT_PMU_MANAGER_COMMAND_HEARTBEAT, FALSE, 0, NULL, 0, FALSE);
+    }
 
     if(pmu_data->serial_write_buffer!=NULL &&
        pmu_data->serial_write_buffer->len > 0 &&
@@ -549,6 +554,33 @@ static gboolean pcat_pmu_manager_check_timeout_func(gpointer user_data)
     }
 
     return TRUE;
+}
+
+static void pcat_pmu_manager_date_time_sync(PCatPMUManagerData *pmu_data)
+{
+    guint8 data[7];
+    GDateTime *dt;
+    gint y, m, d, h, min, sec;
+
+    dt = g_date_time_new_now_utc();
+    g_date_time_get_ymd(dt, &y, &m, &d);
+    h = g_date_time_get_hour(dt);
+    min = g_date_time_get_minute(dt);
+    sec = g_date_time_get_second(dt);
+
+    data[0] = y & 0xFF;
+    data[1] = (y >> 8) & 0xFF;
+    data[2] = m;
+    data[3] = d;
+    data[4] = h;
+    data[5] = min;
+    data[6] = sec;
+
+    g_date_time_unref(dt);
+
+    pcat_pmu_serial_write_data_request(pmu_data,
+        PCAT_PMU_MANAGER_COMMAND_DATE_TIME_SYNC, FALSE, 0,
+        data, 7, TRUE);
 }
 
 gboolean pcat_pmu_manager_init()
@@ -574,6 +606,7 @@ gboolean pcat_pmu_manager_init()
     g_pcat_pmu_manager_data.initialized = TRUE;
 
     pcat_pmu_manager_watchdog_timeout_set(5);
+    pcat_pmu_manager_date_time_sync(&g_pcat_pmu_manager_data);
 
     return TRUE;
 }
@@ -622,7 +655,7 @@ gboolean pcat_pmu_manager_reboot_completed()
 
 void pcat_pmu_manager_watchdog_timeout_set(guint timeout)
 {
-    guint8 timeouts[3] = {60, timeout, 60};
+    guint8 timeouts[3] = {60, 60, timeout};
 
     if(!g_pcat_pmu_manager_data.initialized)
     {
