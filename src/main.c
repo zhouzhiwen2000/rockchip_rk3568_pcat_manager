@@ -1,4 +1,5 @@
 #include <unistd.h>
+#include <stdio.h>
 #include <signal.h>
 #include <glib.h>
 #include <glib-unix.h>
@@ -7,17 +8,23 @@
 #include "pmu-manager.h"
 
 #define PCAT_MANAGER_MAIN_CONFIG_FILE "/etc/pcat-manager.conf"
+#define PCAT_MANAGER_MAIN_SHUTDOWN_REQUEST_FILE "/tmp/pcat-shutdown.tmp"
 
-static gboolean g_pcat_cmd_daemonsize = FALSE;
+static const guint g_pcat_main_shutdown_wait_max = 30;
+
+static gboolean g_pcat_main_cmd_daemonsize = FALSE;
 
 static GMainLoop *g_pcat_main_loop = NULL;
 static gboolean g_pcat_main_shutdown = FALSE;
+static gboolean g_pcat_main_reboot = FALSE;
+static gboolean g_pcat_main_request_shutdown = FALSE;
+static guint g_pcat_main_shutdown_wait_count = 0;
 
 static PCatManagerMainConfigData g_pcat_manager_main_config_data = {0};
 
 static GOptionEntry g_pcat_cmd_entries[] =
 {
-    { "daemon", 'D', 0, G_OPTION_ARG_NONE, &g_pcat_cmd_daemonsize,
+    { "daemon", 'D', 0, G_OPTION_ARG_NONE, &g_pcat_main_cmd_daemonsize,
         "Run as a daemon", NULL },
     { NULL, 0, 0, G_OPTION_ARG_NONE, NULL, NULL, NULL }
 };
@@ -123,7 +130,8 @@ static gboolean pcat_main_config_data_load()
     return TRUE;
 }
 
-static gboolean pcat_main_shutdown_check_timeout_func(gpointer user_data)
+static gboolean pcat_manager_main_shutdown_check_timeout_func(
+    gpointer user_data)
 {
     if(pcat_pmu_manager_shutdown_completed())
     {
@@ -134,15 +142,94 @@ static gboolean pcat_main_shutdown_check_timeout_func(gpointer user_data)
             return FALSE;
         }
     }
+    else if(g_pcat_main_shutdown_wait_count > g_pcat_main_shutdown_wait_max)
+    {
+        g_warning("PMU shutdown request timeout!");
+
+        if(g_pcat_main_loop!=NULL)
+        {
+            g_main_loop_quit(g_pcat_main_loop);
+
+            return FALSE;
+        }
+    }
+
+    g_pcat_main_shutdown_wait_count++;
 
     return TRUE;
+}
+
+static gboolean pcat_manager_main_reboot_check_timeout_func(
+    gpointer user_data)
+{
+    if(pcat_pmu_manager_reboot_completed())
+    {
+        if(g_pcat_main_loop!=NULL)
+        {
+            g_main_loop_quit(g_pcat_main_loop);
+
+            return FALSE;
+        }
+    }
+    else if(g_pcat_main_shutdown_wait_count > g_pcat_main_shutdown_wait_max)
+    {
+        g_warning("PMU reboot request timeout!");
+
+        if(g_pcat_main_loop!=NULL)
+        {
+            g_main_loop_quit(g_pcat_main_loop);
+
+            return FALSE;
+        }
+    }
+
+    g_pcat_main_shutdown_wait_count++;
+
+    return TRUE;
+}
+
+static void pcat_manager_main_system_shutdown()
+{
+    if(g_pcat_main_shutdown)
+    {
+        return;
+    }
+
+    pcat_pmu_manager_shutdown_request();
+    g_timeout_add_seconds(1,
+        pcat_manager_main_shutdown_check_timeout_func, NULL);
+
+    g_pcat_main_shutdown = TRUE;
+}
+
+static void pcat_manager_main_system_reboot()
+{
+    if(g_pcat_main_reboot)
+    {
+        return;
+    }
+
+    pcat_pmu_manager_reboot_request();
+    g_timeout_add_seconds(1,
+        pcat_manager_main_reboot_check_timeout_func, NULL);
+
+    g_pcat_main_reboot = TRUE;
 }
 
 static gboolean pcat_main_sigterm_func(gpointer user_data)
 {
     g_message("SIGTERM detected.");
 
-    pcat_manager_main_request_shutdown();
+    if(g_pcat_main_request_shutdown ||
+        g_file_test(PCAT_MANAGER_MAIN_SHUTDOWN_REQUEST_FILE,
+        G_FILE_TEST_IS_REGULAR | G_FILE_TEST_EXISTS))
+    {
+        pcat_manager_main_system_shutdown();
+    }
+    else
+    {
+        pcat_manager_main_system_reboot();
+    }
 
     return TRUE;
 }
@@ -168,7 +255,7 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    if(g_pcat_cmd_daemonsize)
+    if(g_pcat_main_cmd_daemonsize)
     {
         daemon(0, 0);
     }
@@ -210,13 +297,7 @@ PCatManagerMainConfigData *pcat_manager_main_config_data_get()
 
 void pcat_manager_main_request_shutdown()
 {
-    if(g_pcat_main_shutdown)
-    {
-        return;
-    }
-
-    pcat_pmu_manager_shutdown_request();
-    g_timeout_add_seconds(1, pcat_main_shutdown_check_timeout_func, NULL);
-
-    g_pcat_main_shutdown = TRUE;
+    g_pcat_main_request_shutdown = TRUE;
+    g_spawn_command_line_async("poweroff", NULL);
 }
+

@@ -17,7 +17,9 @@ typedef enum
     PCAT_PMU_MANAGER_COMMAND_PMU_REQUEST_SHUTDOWN = 0xD,
     PCAT_PMU_MANAGER_COMMAND_PMU_REQUEST_SHUTDOWN_ACK = 0xE,
     PCAT_PMU_MANAGER_COMMAND_HOST_REQUEST_SHUTDOWN = 0xF,
-    PCAT_PMU_MANAGER_COMMAND_HOST_REQUEST_SHUTDOWN_ACK = 0x10
+    PCAT_PMU_MANAGER_COMMAND_HOST_REQUEST_SHUTDOWN_ACK = 0x10,
+    PCAT_PMU_MANAGER_COMMAND_WATCHDOG_TIMEOUT_SET = 0x13,
+    PCAT_PMU_MANAGER_COMMAND_WATCHDOG_TIMEOUT_SET_ACK = 0x14,
 }PCatPMUManagerCommandType;
 
 typedef struct _PCatPMUManagerData
@@ -34,7 +36,10 @@ typedef struct _PCatPMUManagerData
     GByteArray *serial_write_buffer;
     guint16 serial_write_frame_num;
 
+    gboolean shutdown_request;
+    gboolean reboot_request;
     gboolean shutdown_process_completed;
+    gboolean reboot_process_completed;
 }PCatPMUManagerData;
 
 static PCatPMUManagerData g_pcat_pmu_manager_data = {0};
@@ -307,7 +312,7 @@ static void pcat_pmu_serial_read_data_parse(PCatPMUManagerData *pmu_data)
                     }
                     case PCAT_PMU_MANAGER_COMMAND_PMU_REQUEST_SHUTDOWN:
                     {
-                        g_spawn_command_line_async("poweroff", NULL);
+                        pcat_manager_main_request_shutdown();
 
                         if(need_ack)
                         {
@@ -319,8 +324,19 @@ static void pcat_pmu_serial_read_data_parse(PCatPMUManagerData *pmu_data)
                     }
                     case PCAT_PMU_MANAGER_COMMAND_HOST_REQUEST_SHUTDOWN_ACK:
                     {
-                        pmu_data->shutdown_process_completed = TRUE;
+                        if(pmu_data->shutdown_request)
+                        {
+                            pmu_data->shutdown_process_completed = TRUE;
+                        }
 
+                        break;
+                    }
+                    case PCAT_PMU_MANAGER_COMMAND_WATCHDOG_TIMEOUT_SET_ACK:
+                    {
+                        if(pmu_data->reboot_request)
+                        {
+                            pmu_data->reboot_process_completed = TRUE;
+                        }
                         break;
                     }
                     default:
@@ -542,6 +558,11 @@ gboolean pcat_pmu_manager_init()
         return TRUE;
     }
 
+    g_pcat_pmu_manager_data.shutdown_request = FALSE;
+    g_pcat_pmu_manager_data.reboot_request = FALSE;
+    g_pcat_pmu_manager_data.shutdown_process_completed = FALSE;
+    g_pcat_pmu_manager_data.reboot_process_completed = FALSE;
+
     if(!pcat_pmu_serial_open(&g_pcat_pmu_manager_data))
     {
         return FALSE;
@@ -551,6 +572,8 @@ gboolean pcat_pmu_manager_init()
         pcat_pmu_manager_check_timeout_func, &g_pcat_pmu_manager_data);
 
     g_pcat_pmu_manager_data.initialized = TRUE;
+
+    pcat_pmu_manager_watchdog_timeout_set(5);
 
     return TRUE;
 }
@@ -578,9 +601,41 @@ void pcat_pmu_manager_shutdown_request()
     pcat_pmu_serial_write_data_request(&g_pcat_pmu_manager_data,
         PCAT_PMU_MANAGER_COMMAND_HOST_REQUEST_SHUTDOWN,
         FALSE, 0, NULL, 0, TRUE);
+    g_pcat_pmu_manager_data.shutdown_request = TRUE;
+}
+
+void pcat_pmu_manager_reboot_request()
+{
+    pcat_pmu_manager_watchdog_timeout_set(60);
+    g_pcat_pmu_manager_data.reboot_request = TRUE;
 }
 
 gboolean pcat_pmu_manager_shutdown_completed()
 {
     return g_pcat_pmu_manager_data.shutdown_process_completed;
+}
+
+gboolean pcat_pmu_manager_reboot_completed()
+{
+    return g_pcat_pmu_manager_data.reboot_process_completed;
+}
+
+void pcat_pmu_manager_watchdog_timeout_set(guint timeout)
+{
+    guint8 timeouts[3] = {60, timeout, 60};
+
+    if(!g_pcat_pmu_manager_data.initialized)
+    {
+        return;
+    }
+
+    if(g_pcat_pmu_manager_data.serial_channel==NULL ||
+        g_pcat_pmu_manager_data.serial_write_buffer==NULL)
+    {
+        return;
+    }
+
+    pcat_pmu_serial_write_data_request(&g_pcat_pmu_manager_data,
+        PCAT_PMU_MANAGER_COMMAND_WATCHDOG_TIMEOUT_SET, FALSE, 0,
+        timeouts, 3, TRUE);
 }
