@@ -20,6 +20,8 @@ typedef enum
     PCAT_PMU_MANAGER_COMMAND_PMU_REQUEST_SHUTDOWN_ACK = 0xE,
     PCAT_PMU_MANAGER_COMMAND_HOST_REQUEST_SHUTDOWN = 0xF,
     PCAT_PMU_MANAGER_COMMAND_HOST_REQUEST_SHUTDOWN_ACK = 0x10,
+    PCAT_PMU_MANAGER_COMMAND_PMU_REQUEST_FACTORY_RESET = 0x11,
+    PCAT_PMU_MANAGER_COMMAND_PMU_REQUEST_FACTORY_RESET_ACK = 0x12,
     PCAT_PMU_MANAGER_COMMAND_WATCHDOG_TIMEOUT_SET = 0x13,
     PCAT_PMU_MANAGER_COMMAND_WATCHDOG_TIMEOUT_SET_ACK = 0x14,
 }PCatPMUManagerCommandType;
@@ -208,10 +210,77 @@ static void pcat_pmu_serial_write_data_request(
     }
 }
 
+static void pcat_pmu_manager_date_time_sync(PCatPMUManagerData *pmu_data)
+{
+    guint8 data[7];
+    GDateTime *dt;
+    gint y, m, d, h, min, sec;
+
+    dt = g_date_time_new_now_utc();
+    g_date_time_get_ymd(dt, &y, &m, &d);
+    h = g_date_time_get_hour(dt);
+    min = g_date_time_get_minute(dt);
+    sec = g_date_time_get_second(dt);
+
+    data[0] = y & 0xFF;
+    data[1] = (y >> 8) & 0xFF;
+    data[2] = m;
+    data[3] = d;
+    data[4] = h;
+    data[5] = min;
+    data[6] = sec;
+
+    g_date_time_unref(dt);
+
+    pcat_pmu_serial_write_data_request(pmu_data,
+        PCAT_PMU_MANAGER_COMMAND_DATE_TIME_SYNC, FALSE, 0,
+        data, 7, TRUE);
+}
+
 static void pcat_pmu_serial_status_data_parse(PCatPMUManagerData *pmu_data,
     const guint8 *data, guint len)
 {
+    guint16 battery_voltage, charger_voltage;
+    guint16 gpio_input, gpio_output;
+    gint y, m, d, h, min, s;
+    GDateTime *pmu_dt, *host_dt;
+    gint64 pmu_unix_time, host_unix_time;
 
+    if(len < 16)
+    {
+        return;
+    }
+
+    battery_voltage = data[0] + ((guint16)data[1] << 8);
+    charger_voltage = data[2] + ((guint16)data[3] << 8);
+    gpio_input = data[4] + ((guint16)data[5] << 8);
+    gpio_output = data[6] + ((guint16)data[7] << 8);
+    y = data[8] + ((guint16)data[9] << 8);
+    m = data[10];
+    d = data[11];
+    h = data[12];
+    min = data[13];
+    s = data[14];
+
+    pmu_dt = g_date_time_new_utc(y, m, d, h, min, (gdouble)s);
+    pmu_unix_time = g_date_time_to_unix(pmu_dt);
+    g_date_time_unref(pmu_dt);
+
+    host_dt = g_date_time_new_now_utc();
+    host_unix_time = g_date_time_to_unix(host_dt);
+    g_date_time_unref(host_dt);
+
+    if(pmu_unix_time - host_unix_time > 60 ||
+        host_unix_time - pmu_unix_time > 60)
+    {
+        g_message("PMU time out of sync, send time sync command.");
+
+        pcat_pmu_manager_date_time_sync(pmu_data);
+    }
+
+    g_debug("PMU report battery voltage %u mV, charger voltage %u mV, "
+        "GPIO input state %X, output state %X.", battery_voltage,
+        charger_voltage, gpio_input, gpio_output);
 }
 
 static void pcat_pmu_serial_read_data_parse(PCatPMUManagerData *pmu_data)
@@ -348,6 +417,21 @@ static void pcat_pmu_serial_read_data_parse(PCatPMUManagerData *pmu_data)
                         {
                             pmu_data->reboot_process_completed = TRUE;
                         }
+                        break;
+                    }
+                    case PCAT_PMU_MANAGER_COMMAND_PMU_REQUEST_FACTORY_RESET:
+                    {
+                        guint8 state = 0;
+
+                        g_spawn_command_line_async(
+                            "pcat-factory-reset.sh", NULL);
+
+                        if(need_ack)
+                        {
+                            pcat_pmu_serial_write_data_request(pmu_data,
+                                command+1, TRUE, frame_num, &state, 1, FALSE);
+                        }
+
                         break;
                     }
                     default:
@@ -563,33 +647,6 @@ static gboolean pcat_pmu_manager_check_timeout_func(gpointer user_data)
     }
 
     return TRUE;
-}
-
-static void pcat_pmu_manager_date_time_sync(PCatPMUManagerData *pmu_data)
-{
-    guint8 data[7];
-    GDateTime *dt;
-    gint y, m, d, h, min, sec;
-
-    dt = g_date_time_new_now_utc();
-    g_date_time_get_ymd(dt, &y, &m, &d);
-    h = g_date_time_get_hour(dt);
-    min = g_date_time_get_minute(dt);
-    sec = g_date_time_get_second(dt);
-
-    data[0] = y & 0xFF;
-    data[1] = (y >> 8) & 0xFF;
-    data[2] = m;
-    data[3] = d;
-    data[4] = h;
-    data[5] = min;
-    data[6] = sec;
-
-    g_date_time_unref(dt);
-
-    pcat_pmu_serial_write_data_request(pmu_data,
-        PCAT_PMU_MANAGER_COMMAND_DATE_TIME_SYNC, FALSE, 0,
-        data, 7, TRUE);
 }
 
 gboolean pcat_pmu_manager_init()

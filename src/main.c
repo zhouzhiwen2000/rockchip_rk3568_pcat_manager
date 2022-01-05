@@ -19,6 +19,7 @@ static gboolean g_pcat_main_shutdown = FALSE;
 static gboolean g_pcat_main_reboot = FALSE;
 static gboolean g_pcat_main_request_shutdown = FALSE;
 static guint g_pcat_main_shutdown_wait_count = 0;
+static gboolean g_pcat_main_watchdog_disabled = FALSE;
 
 static PCatManagerMainConfigData g_pcat_manager_main_config_data = {0};
 
@@ -226,10 +227,25 @@ static gboolean pcat_main_sigterm_func(gpointer user_data)
     {
         pcat_manager_main_system_shutdown();
     }
-    else
+    else if(!g_pcat_main_watchdog_disabled)
     {
         pcat_manager_main_system_reboot();
     }
+    else
+    {
+        if(g_pcat_main_loop!=NULL)
+        {
+            g_main_loop_quit(g_pcat_main_loop);
+        }
+    }
+
+    return TRUE;
+}
+
+static gboolean pcat_main_sigusr1_func(gpointer user_data)
+{
+    g_pcat_main_watchdog_disabled = TRUE;
+    pcat_pmu_manager_watchdog_timeout_set(0);
 
     return TRUE;
 }
@@ -262,6 +278,7 @@ int main(int argc, char *argv[])
 
     signal(SIGPIPE, SIG_IGN);
     g_unix_signal_add(SIGTERM, pcat_main_sigterm_func, NULL);
+    g_unix_signal_add(SIGUSR1, pcat_main_sigusr1_func, NULL);
 
     g_pcat_main_loop = g_main_loop_new(NULL, FALSE);
 
