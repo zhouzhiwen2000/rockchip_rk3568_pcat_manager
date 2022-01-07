@@ -6,6 +6,7 @@
 #include "common.h"
 #include "modem-manager.h"
 #include "pmu-manager.h"
+#include "controller.h"
 
 #define PCAT_MANAGER_MAIN_CONFIG_FILE "/etc/pcat-manager.conf"
 #define PCAT_MANAGER_MAIN_SHUTDOWN_REQUEST_FILE "/tmp/pcat-shutdown.tmp"
@@ -293,12 +294,18 @@ int main(int argc, char *argv[])
         g_warning("Failed to initialize modem manager, "
             "LTE/5G modem may not work!");
     }
+    if(!pcat_controller_init())
+    {
+        g_warning("Failed to initialize controller, may not be able to "
+            "communicate with other processes.");
+    }
 
     g_main_loop_run(g_pcat_main_loop);
 
     g_main_loop_unref(g_pcat_main_loop);
     g_pcat_main_loop = NULL;
 
+    pcat_controller_uninit();
     pcat_modem_manager_uninit();
     pcat_pmu_manager_uninit();
     g_option_context_free(context);

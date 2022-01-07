@@ -1,13 +1,15 @@
 pcat_sources = [
     'main.c',
     'pmu-manager.c',
-    'modem-manager.c'
+    'modem-manager.c',
+    'controller.c'
 ]
 
 pcat_headers = [
     'common.h',
     'pmu-manager.h',
-    'modem-manager.h'
+    'modem-manager.h',
+    'controller.h'
 ]
 
 executable('pcat-manager',

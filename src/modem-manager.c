@@ -882,3 +882,4 @@ void pcat_modem_manager_uninit()
 
     g_pcat_modem_manager_data.initialized = FALSE;
 }
+

@@ -9,6 +9,8 @@
 #include "pmu-manager.h"
 #include "common.h"
 
+#define PCAT_PMU_MANAGER_STATEFS_BATTERY_PATH "/run/state/namespaces/Battery"
+
 typedef enum
 {
     PCAT_PMU_MANAGER_COMMAND_HEARTBEAT = 0x1,
@@ -245,6 +247,8 @@ static void pcat_pmu_serial_status_data_parse(PCatPMUManagerData *pmu_data,
     gint y, m, d, h, min, s;
     GDateTime *pmu_dt, *host_dt;
     gint64 pmu_unix_time, host_unix_time;
+    FILE *fp;
+    gdouble battery_percentage;
 
     if(len < 16)
     {
@@ -281,6 +285,33 @@ static void pcat_pmu_serial_status_data_parse(PCatPMUManagerData *pmu_data,
     g_debug("PMU report battery voltage %u mV, charger voltage %u mV, "
         "GPIO input state %X, output state %X.", battery_voltage,
         charger_voltage, gpio_input, gpio_output);
+
+    if(battery_voltage >= 4200)
+    {
+        battery_percentage = 100.0f;
+    }
+    else if(battery_voltage >= 3600)
+    {
+        battery_percentage = ((gdouble)battery_voltage - 3600) * 100 / 600;
+    }
+    else
+    {
+        battery_percentage = 0.0f;
+    }
+
+    fp = fopen(PCAT_PMU_MANAGER_STATEFS_BATTERY_PATH"/ChargePercentage", "w");
+    if(fp!=NULL)
+    {
+        fprintf(fp, "%lf\n", battery_percentage);
+        fclose(fp);
+    }
+
+    fp = fopen(PCAT_PMU_MANAGER_STATEFS_BATTERY_PATH"/Voltage", "w");
+    if(fp!=NULL)
+    {
+        fprintf(fp, "%u\n", battery_voltage * 1000);
+        fclose(fp);
+    }
 }
 
 static void pcat_pmu_serial_read_data_parse(PCatPMUManagerData *pmu_data)
@@ -660,6 +691,8 @@ gboolean pcat_pmu_manager_init()
     g_pcat_pmu_manager_data.reboot_request = FALSE;
     g_pcat_pmu_manager_data.shutdown_process_completed = FALSE;
     g_pcat_pmu_manager_data.reboot_process_completed = FALSE;
+
+    g_mkdir_with_parents(PCAT_PMU_MANAGER_STATEFS_BATTERY_PATH, 0755);
 
     if(!pcat_pmu_serial_open(&g_pcat_pmu_manager_data))
     {
