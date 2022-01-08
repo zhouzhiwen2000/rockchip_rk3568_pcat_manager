@@ -20,6 +20,7 @@ executable('pcat-manager',
         glib2_deps,
         gthread2_deps,
         gio2_deps,
+        gio2_unix_deps,
         libusb1_deps,
         jsonc_deps,
         gpiod_deps

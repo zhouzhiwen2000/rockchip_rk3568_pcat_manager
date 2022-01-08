@@ -249,6 +249,7 @@ static void pcat_pmu_serial_status_data_parse(PCatPMUManagerData *pmu_data,
     gint64 pmu_unix_time, host_unix_time;
     FILE *fp;
     gdouble battery_percentage;
+    gboolean on_battery;
 
     if(len < 16)
     {
@@ -286,17 +287,82 @@ static void pcat_pmu_serial_status_data_parse(PCatPMUManagerData *pmu_data,
         "GPIO input state %X, output state %X.", battery_voltage,
         charger_voltage, gpio_input, gpio_output);
 
-    if(battery_voltage >= 4200)
+    on_battery = (charger_voltage >= 4200);
+
+    if(on_battery)
     {
-        battery_percentage = 100.0f;
-    }
-    else if(battery_voltage >= 3600)
-    {
-        battery_percentage = ((gdouble)battery_voltage - 3600) * 100 / 600;
+        if(battery_voltage >= 4200)
+        {
+            battery_percentage = 100.0f;
+        }
+        else if(battery_voltage >= 4050)
+        {
+            battery_percentage = ((gdouble)battery_voltage - 4050) * 100 / 150;
+        }
+        else
+        {
+            battery_percentage = 0.0f;
+        }
     }
     else
     {
-        battery_percentage = 0.0f;
+        if(battery_voltage >= 4200)
+        {
+            battery_percentage = 100.0f;
+        }
+        else if(battery_voltage >= 4060)
+        {
+            battery_percentage = 90.0f +
+                ((gdouble)battery_voltage - 4060) * 10 / 140;
+        }
+        else if(battery_voltage >= 3980)
+        {
+            battery_percentage = 80.0f +
+                ((gdouble)battery_voltage - 3980) * 10 / 80;
+        }
+        else if(battery_voltage >= 3920)
+        {
+            battery_percentage = 70.0f +
+                ((gdouble)battery_voltage - 3920) * 10 / 60;
+        }
+        else if(battery_voltage >= 3870)
+        {
+            battery_percentage = 60.0f +
+                ((gdouble)battery_voltage - 3870) * 10 / 50;
+        }
+        else if(battery_voltage >= 3820)
+        {
+            battery_percentage = 50.0f +
+                ((gdouble)battery_voltage - 3820) * 10 / 50;
+        }
+        else if(battery_voltage >= 3790)
+        {
+            battery_percentage = 40.0f +
+                ((gdouble)battery_voltage - 3790) * 10 / 30;
+        }
+        else if(battery_voltage >= 3770)
+        {
+            battery_percentage = 30.0f +
+                ((gdouble)battery_voltage - 3770) * 10 / 20;
+        }
+        else if(battery_voltage >= 3740)
+        {
+            battery_percentage = 20.0f +
+                ((gdouble)battery_voltage - 3740) * 10 / 30;
+        }
+        else if(battery_voltage >= 3680)
+        {
+            battery_percentage = 10.0f +
+                ((gdouble)battery_voltage - 3680) * 10 / 60;
+        }
+        else if(battery_voltage >= 3450)
+        {
+            battery_percentage = ((gdouble)battery_voltage - 3450) * 10 / 230;
+        }
+        else
+        {
+            battery_percentage = 0.0f;
+        }
     }
 
     fp = fopen(PCAT_PMU_MANAGER_STATEFS_BATTERY_PATH"/ChargePercentage", "w");
@@ -310,6 +376,13 @@ static void pcat_pmu_serial_status_data_parse(PCatPMUManagerData *pmu_data,
     if(fp!=NULL)
     {
         fprintf(fp, "%u\n", battery_voltage * 1000);
+        fclose(fp);
+    }
+
+    fp = fopen(PCAT_PMU_MANAGER_STATEFS_BATTERY_PATH"/OnBattery", "w");
+    if(fp!=NULL)
+    {
+        fprintf(fp, "%u\n", on_battery ? 1 : 0);
         fclose(fp);
     }
 }
