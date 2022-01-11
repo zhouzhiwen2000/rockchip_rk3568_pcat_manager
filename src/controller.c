@@ -175,6 +175,11 @@ static void pcat_controller_unix_socket_output_json_push(
 
     if(connection_data!=NULL)
     {
+        if(connection_data->output_buffer->len > 2097152)
+        {
+            connection_data->output_buffer->len = 0;
+        }
+
         g_byte_array_append(connection_data->output_buffer,
             (const guint8 *)json_data, strlen(json_data)+1);
 
@@ -252,6 +257,8 @@ static void pcat_controller_unix_socket_input_parse(
                         {
                             callback(ctrl_data, connection_data, root);
                         }
+
+                        g_debug("Controller got command %s.", command);
                     }
 
                     json_object_put(root);
@@ -354,6 +361,8 @@ static gboolean pcat_controller_unix_socket_incoming_func(
 
     g_hash_table_replace(ctrl_data->control_connection_table,
         connection_data->connection, connection_data);
+
+    g_message("Controller client connected.");
 
     return TRUE;
 }
