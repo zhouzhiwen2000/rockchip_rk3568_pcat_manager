@@ -139,6 +139,13 @@ static gboolean pcat_controller_unix_socket_output_watch_func(
 
         g_clear_error(&error);
     }
+    else if(wsize==0)
+    {
+        ret = FALSE;
+        need_close = TRUE;
+
+        g_message("A Unix socket connection closed.");
+    }
 
     if(need_close)
     {
@@ -323,6 +330,12 @@ static gboolean pcat_controller_unix_socket_input_watch_func(
         }
 
         g_clear_error(&error);
+    }
+    else if(rsize==0)
+    {
+        ret = FALSE;
+
+        g_message("A Unix socket connection closed.");
     }
 
     if(!ret)
