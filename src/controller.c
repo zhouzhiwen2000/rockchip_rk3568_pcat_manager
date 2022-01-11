@@ -116,7 +116,7 @@ static gboolean pcat_controller_unix_socket_output_watch_func(
 
     if(error!=NULL)
     {
-        if(g_error_matches(error, G_IO_ERROR, G_IO_ERROR_AGAIN))
+        if(g_error_matches(error, G_IO_ERROR, G_IO_ERROR_WOULD_BLOCK))
         {
             ret = TRUE;
         }
@@ -303,7 +303,7 @@ static gboolean pcat_controller_unix_socket_input_watch_func(
 
     if(error!=NULL)
     {
-        if(g_error_matches(error, G_IO_ERROR, G_IO_ERROR_AGAIN))
+        if(g_error_matches(error, G_IO_ERROR, G_IO_ERROR_WOULD_BLOCK))
         {
 
         }
