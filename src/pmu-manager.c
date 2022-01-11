@@ -46,6 +46,11 @@ typedef struct _PCatPMUManagerData
     gboolean reboot_request;
     gboolean shutdown_process_completed;
     gboolean reboot_process_completed;
+
+    guint last_battery_voltage;
+    guint last_charger_voltage;
+    gboolean last_on_battery_state;
+    guint last_battery_percentage;
 }PCatPMUManagerData;
 
 static PCatPMUManagerData g_pcat_pmu_manager_data = {0};
@@ -364,6 +369,11 @@ static void pcat_pmu_serial_status_data_parse(PCatPMUManagerData *pmu_data,
             battery_percentage = 0.0f;
         }
     }
+
+    pmu_data->last_battery_voltage = battery_voltage;
+    pmu_data->last_charger_voltage = charger_voltage;
+    pmu_data->last_on_battery_state = on_battery;
+    pmu_data->last_battery_percentage = battery_percentage * 100;
 
     fp = fopen(PCAT_PMU_MANAGER_STATEFS_BATTERY_PATH"/ChargePercentage", "w");
     if(fp!=NULL)
@@ -844,3 +854,32 @@ void pcat_pmu_manager_watchdog_timeout_set(guint timeout)
         PCAT_PMU_MANAGER_COMMAND_WATCHDOG_TIMEOUT_SET, FALSE, 0,
         timeouts, 3, TRUE);
 }
+
+gboolean pcat_pmu_manager_pmu_status_get(guint *battery_voltage,
+    guint *charger_voltage, gboolean *on_battery, guint *battery_percentage)
+{
+    if(!g_pcat_pmu_manager_data.initialized)
+    {
+        return FALSE;
+    }
+
+    if(battery_voltage!=NULL)
+    {
+        *battery_voltage = g_pcat_pmu_manager_data.last_battery_voltage;
+    }
+    if(charger_voltage!=NULL)
+    {
+        *charger_voltage = g_pcat_pmu_manager_data.last_charger_voltage;
+    }
+    if(on_battery!=NULL)
+    {
+        *on_battery = g_pcat_pmu_manager_data.last_on_battery_state;
+    }
+    if(battery_percentage!=NULL)
+    {
+        *battery_percentage = g_pcat_pmu_manager_data.last_battery_percentage;
+    }
+
+    return TRUE;
+}
+

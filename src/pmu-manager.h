@@ -12,6 +12,8 @@ void pcat_pmu_manager_reboot_request();
 gboolean pcat_pmu_manager_shutdown_completed();
 gboolean pcat_pmu_manager_reboot_completed();
 void pcat_pmu_manager_watchdog_timeout_set(guint timeout);
+gboolean pcat_pmu_manager_pmu_status_get(guint *battery_voltage,
+    guint *charger_voltage, gboolean *on_battery, guint *battery_percentage);
 
 G_END_DECLS
 
