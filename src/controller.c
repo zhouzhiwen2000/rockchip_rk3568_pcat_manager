@@ -516,7 +516,6 @@ static gboolean pcat_controller_unix_socket_open(
         1, pcat_controller_unix_socket_connection_check_timeout_func,
         ctrl_data);
 
-
     return TRUE;
 }
 

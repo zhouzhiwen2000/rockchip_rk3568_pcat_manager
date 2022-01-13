@@ -18,6 +18,8 @@ typedef enum
     PCAT_PMU_MANAGER_COMMAND_STATUS_REPORT_ACK = 0x8,
     PCAT_PMU_MANAGER_COMMAND_DATE_TIME_SYNC = 0x9,
     PCAT_PMU_MANAGER_COMMAND_DATE_TIME_SYNC_ACK = 0xA,
+    PCAT_PMU_MANAGER_COMMAND_SCHEDULE_STARTUP_TIME_SET = 0xB,
+    PCAT_PMU_MANAGER_COMMAND_SCHEDULE_STARTUP_TIME_SET_ACK = 0xC,
     PCAT_PMU_MANAGER_COMMAND_PMU_REQUEST_SHUTDOWN = 0xD,
     PCAT_PMU_MANAGER_COMMAND_PMU_REQUEST_SHUTDOWN_ACK = 0xE,
     PCAT_PMU_MANAGER_COMMAND_HOST_REQUEST_SHUTDOWN = 0xF,
@@ -44,6 +46,7 @@ typedef struct _PCatPMUManagerData
 
     gboolean shutdown_request;
     gboolean reboot_request;
+    gboolean shutdown_planned;
     gboolean shutdown_process_completed;
     gboolean reboot_process_completed;
 
@@ -244,6 +247,68 @@ static void pcat_pmu_manager_date_time_sync(PCatPMUManagerData *pmu_data)
         data, 7, TRUE);
 }
 
+static void pcat_pmu_manager_schedule_time_update_internal(
+    PCatPMUManagerData *pmu_data)
+{
+    guint i;
+    const PCatManagerMainUserConfigData *uconfig_data;
+    const PCatManagerPowerScheduleData *sdata;
+    GByteArray *startup_setup_buffer;
+    guint8 v;
+
+    uconfig_data = pcat_manager_main_user_config_data_get();
+    if(uconfig_data->power_schedule_data!=NULL)
+    {
+        startup_setup_buffer = g_byte_array_new();
+
+        for(i=0;i<uconfig_data->power_schedule_data->len;i++)
+        {
+            sdata = g_ptr_array_index(uconfig_data->power_schedule_data, i);
+            if(!sdata->enabled || !sdata->action)
+            {
+                continue;
+            }
+
+            v = sdata->year & 0xFF;
+            g_byte_array_append(startup_setup_buffer, &v, 1);
+            v = (sdata->year >> 8) & 0xFF;
+            g_byte_array_append(startup_setup_buffer, &v, 1);
+
+            v = sdata->month;
+            g_byte_array_append(startup_setup_buffer, &v, 1);
+
+            v = sdata->day;
+            g_byte_array_append(startup_setup_buffer, &v, 1);
+
+            v = sdata->hour;
+            g_byte_array_append(startup_setup_buffer, &v, 1);
+
+            v = sdata->minute;
+            g_byte_array_append(startup_setup_buffer, &v, 1);
+
+            v = sdata->dow_bits;
+            g_byte_array_append(startup_setup_buffer, &v, 1);
+
+            v = sdata->enable_bits;
+            g_byte_array_append(startup_setup_buffer, &v, 1);
+
+            if(startup_setup_buffer->len >= 48)
+            {
+                break;
+            }
+        }
+
+        if(startup_setup_buffer->len > 0)
+        {
+            pcat_pmu_serial_write_data_request(pmu_data,
+                PCAT_PMU_MANAGER_COMMAND_SCHEDULE_STARTUP_TIME_SET, FALSE, 0,
+                startup_setup_buffer->data, startup_setup_buffer->len, TRUE);
+        }
+
+        g_byte_array_unref(startup_setup_buffer);
+    }
+}
+
 static void pcat_pmu_serial_status_data_parse(PCatPMUManagerData *pmu_data,
     const guint8 *data, guint len)
 {
@@ -292,7 +357,7 @@ static void pcat_pmu_serial_status_data_parse(PCatPMUManagerData *pmu_data,
         "GPIO input state %X, output state %X.", battery_voltage,
         charger_voltage, gpio_input, gpio_output);
 
-    on_battery = (charger_voltage >= 4200);
+    on_battery = (charger_voltage < 4200);
 
     if(on_battery)
     {
@@ -739,6 +804,12 @@ static void pcat_pmu_serial_close(PCatPMUManagerData *pmu_data)
 static gboolean pcat_pmu_manager_check_timeout_func(gpointer user_data)
 {
     PCatPMUManagerData *pmu_data = (PCatPMUManagerData *)user_data;
+    const PCatManagerMainUserConfigData *uconfig_data;
+    const PCatManagerPowerScheduleData *sdata;
+    guint i;
+    GDateTime *dt;
+    gboolean need_action = FALSE;
+    guint dow;
 
     if(pmu_data->serial_channel==NULL)
     {
@@ -749,6 +820,100 @@ static gboolean pcat_pmu_manager_check_timeout_func(gpointer user_data)
     {
         pcat_pmu_serial_write_data_request(pmu_data,
             PCAT_PMU_MANAGER_COMMAND_HEARTBEAT, FALSE, 0, NULL, 0, FALSE);
+
+        uconfig_data = pcat_manager_main_user_config_data_get();
+        if(uconfig_data->power_schedule_data!=NULL &&
+            !pmu_data->shutdown_planned)
+        {
+            dt = g_date_time_new_now_utc();
+
+            for(i=0;i<uconfig_data->power_schedule_data->len;i++)
+            {
+                sdata = g_ptr_array_index(
+                    uconfig_data->power_schedule_data, i);
+
+                if(!sdata->enabled || sdata->action)
+                {
+                    continue;
+                }
+
+                if(!(sdata->enable_bits &
+                    PCAT_MANAGER_POWER_SCHEDULE_ENABLE_MINUTE))
+                {
+                    continue;
+                }
+
+                if(sdata->enable_bits &
+                    PCAT_MANAGER_POWER_SCHEDULE_ENABLE_YEAR)
+                {
+                    if(g_date_time_get_year(dt)==sdata->year &&
+                       g_date_time_get_month(dt)==sdata->month &&
+                       g_date_time_get_day_of_month(dt)==sdata->day &&
+                       g_date_time_get_hour(dt)==sdata->hour &&
+                       g_date_time_get_minute(dt)==sdata->minute)
+                    {
+                        need_action = TRUE;
+                    }
+                }
+                else if(sdata->enable_bits &
+                    PCAT_MANAGER_POWER_SCHEDULE_ENABLE_MONTH)
+                {
+                    if(g_date_time_get_month(dt)==sdata->month &&
+                       g_date_time_get_day_of_month(dt)==sdata->day &&
+                       g_date_time_get_hour(dt)==sdata->hour &&
+                       g_date_time_get_minute(dt)==sdata->minute)
+                    {
+                        need_action = TRUE;
+                    }
+                }
+                else if(sdata->enable_bits &
+                    PCAT_MANAGER_POWER_SCHEDULE_ENABLE_DAY)
+                {
+                    if(g_date_time_get_day_of_month(dt)==sdata->day &&
+                       g_date_time_get_hour(dt)==sdata->hour &&
+                       g_date_time_get_minute(dt)==sdata->minute)
+                    {
+                        need_action = TRUE;
+                    }
+                }
+                else if(sdata->enable_bits &
+                    PCAT_MANAGER_POWER_SCHEDULE_ENABLE_DOW)
+                {
+                    dow = g_date_time_get_day_of_week(dt) % 7;
+
+                    if(((sdata->dow_bits >> dow) & 1) &&
+                       g_date_time_get_hour(dt)==sdata->hour &&
+                       g_date_time_get_minute(dt)==sdata->minute)
+                    {
+                        need_action = TRUE;
+                    }
+                }
+                else if(sdata->enable_bits &
+                    PCAT_MANAGER_POWER_SCHEDULE_ENABLE_HOUR)
+                {
+                    if(g_date_time_get_hour(dt)==sdata->hour &&
+                       g_date_time_get_minute(dt)==sdata->minute)
+                    {
+                        need_action = TRUE;
+                    }
+                }
+                else
+                {
+                    if(g_date_time_get_minute(dt)==sdata->minute)
+                    {
+                        need_action = TRUE;
+                    }
+                }
+
+                if(need_action)
+                {
+                    pcat_manager_main_request_shutdown();
+                    pmu_data->shutdown_planned = TRUE;
+                }
+            }
+
+            g_date_time_unref(dt);
+        }
     }
 
     if(pmu_data->serial_write_buffer!=NULL &&
@@ -765,6 +930,8 @@ static gboolean pcat_pmu_manager_check_timeout_func(gpointer user_data)
 
 gboolean pcat_pmu_manager_init()
 {
+
+
     if(g_pcat_pmu_manager_data.initialized)
     {
         return TRUE;
@@ -789,6 +956,7 @@ gboolean pcat_pmu_manager_init()
 
     pcat_pmu_manager_watchdog_timeout_set(5);
     pcat_pmu_manager_date_time_sync(&g_pcat_pmu_manager_data);
+    pcat_pmu_manager_schedule_time_update_internal(&g_pcat_pmu_manager_data);
 
     return TRUE;
 }
@@ -883,3 +1051,12 @@ gboolean pcat_pmu_manager_pmu_status_get(guint *battery_voltage,
     return TRUE;
 }
 
+void pcat_pmu_manager_schedule_time_update()
+{
+    if(!g_pcat_pmu_manager_data.initialized)
+    {
+        return;
+    }
+
+    pcat_pmu_manager_schedule_time_update_internal(&g_pcat_pmu_manager_data);
+}

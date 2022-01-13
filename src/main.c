@@ -9,6 +9,7 @@
 #include "controller.h"
 
 #define PCAT_MANAGER_MAIN_CONFIG_FILE "/etc/pcat-manager.conf"
+#define PCAT_MANAGER_MAIN_USER_CONFIG_FILE "/etc/pcat-manager-userdata.conf"
 #define PCAT_MANAGER_MAIN_SHUTDOWN_REQUEST_FILE "/tmp/pcat-shutdown.tmp"
 
 static const guint g_pcat_main_shutdown_wait_max = 30;
@@ -23,6 +24,8 @@ static guint g_pcat_main_shutdown_wait_count = 0;
 static gboolean g_pcat_main_watchdog_disabled = FALSE;
 
 static PCatManagerMainConfigData g_pcat_manager_main_config_data = {0};
+static PCatManagerMainUserConfigData g_pcat_manager_main_user_config_data =
+    {0};
 
 static GOptionEntry g_pcat_cmd_entries[] =
 {
@@ -128,6 +131,159 @@ static gboolean pcat_main_config_data_load()
     g_key_file_unref(keyfile);
 
     g_pcat_manager_main_config_data.valid = TRUE;
+
+    return TRUE;
+}
+
+static gboolean pcat_main_user_config_data_load()
+{
+    GKeyFile *keyfile;
+    GError *error = NULL;
+    gint iv;
+    guint i;
+    gchar item_name[32] = {0};
+    PCatManagerMainUserConfigData *uconfig_data =
+        &g_pcat_manager_main_user_config_data;
+    PCatManagerPowerScheduleData *sdata;
+
+    uconfig_data->valid = FALSE;
+
+    keyfile = g_key_file_new();
+
+    if(!g_key_file_load_from_file(keyfile, PCAT_MANAGER_MAIN_USER_CONFIG_FILE,
+        G_KEY_FILE_NONE, &error))
+    {
+        g_warning("Failed to load keyfile %s: %s!",
+            PCAT_MANAGER_MAIN_USER_CONFIG_FILE,
+            error->message!=NULL ? error->message : "Unknown");
+
+        g_clear_error(&error);
+
+        return FALSE;
+    }
+
+    if(uconfig_data->power_schedule_data!=NULL)
+    {
+        g_ptr_array_unref(uconfig_data->power_schedule_data);
+    }
+    uconfig_data->power_schedule_data = g_ptr_array_new_with_free_func(g_free);
+
+    for(i=0;;i++)
+    {
+        g_snprintf(item_name, 31, "EnableBits%u", i);
+        if(!g_key_file_has_key(keyfile, "Schedule", item_name, NULL))
+        {
+            break;
+        }
+
+        sdata = g_new0(PCatManagerPowerScheduleData, 1);
+
+        iv = g_key_file_get_integer(keyfile, "Schedule", item_name, NULL);
+
+        if(iv & PCAT_MANAGER_POWER_SCHEDULE_ENABLE_MINUTE)
+        {
+            sdata->enabled = TRUE;
+        }
+        else
+        {
+            sdata->enabled = FALSE;
+
+            continue;
+        }
+
+        sdata->enable_bits = iv & 0xFF;
+
+        g_snprintf(item_name, 31, "Date%u", i);
+        iv = g_key_file_get_integer(keyfile, "Schedule", item_name, NULL);
+        sdata->year = (iv / 10000) & 10000;
+        sdata->month = (iv / 100) & 100;
+        sdata->day = iv & 100;
+
+        g_snprintf(item_name, 31, "Time%u", i);
+        iv = g_key_file_get_integer(keyfile, "Schedule", item_name, NULL);
+        sdata->hour = (iv / 100) & 100;
+        sdata->minute = iv & 100;
+
+        g_snprintf(item_name, 31, "DOWBits%u", i);
+        iv = g_key_file_get_integer(keyfile, "Schedule", item_name, NULL);
+        sdata->dow_bits = iv & 0xFF;
+
+        g_snprintf(item_name, 31, "Action%u", i);
+        iv = g_key_file_get_integer(keyfile, "Schedule", item_name, NULL);
+        sdata->action = (iv!=0);
+
+        g_ptr_array_add(uconfig_data->power_schedule_data, sdata);
+    }
+
+    g_key_file_unref(keyfile);
+
+    uconfig_data->valid = TRUE;
+    uconfig_data->dirty = FALSE;
+
+    return TRUE;
+}
+
+static gboolean pcat_main_user_config_data_save()
+{
+    GKeyFile *keyfile;
+    GError *error = NULL;
+    guint i;
+    gchar item_name[32] = {0};
+    PCatManagerMainUserConfigData *uconfig_data =
+        &g_pcat_manager_main_user_config_data;
+    PCatManagerPowerScheduleData *sdata;
+    gboolean ret;
+
+    if(!uconfig_data->dirty)
+    {
+        return TRUE;
+    }
+
+    keyfile = g_key_file_new();
+
+    if(uconfig_data->power_schedule_data!=NULL)
+    {
+        for(i=0;i<uconfig_data->power_schedule_data->len;i++)
+        {
+            sdata = g_ptr_array_index(uconfig_data->power_schedule_data, i);
+
+            g_snprintf(item_name, 31, "EnableBits%u", i);
+            g_key_file_set_integer(keyfile, "Schedule", item_name,
+                sdata->enable_bits);
+
+            g_snprintf(item_name, 31, "Date%u", i);
+            g_key_file_set_integer(keyfile, "Schedule", item_name,
+                (gint)sdata->year * 10000 + (gint)sdata->month * 100 +
+                (gint)sdata->day);
+
+            g_snprintf(item_name, 31, "Time%u", i);
+            g_key_file_set_integer(keyfile, "Schedule", item_name,
+                (gint)sdata->hour * 100 + (gint)sdata->minute);
+
+            g_snprintf(item_name, 31, "DOWBits%u", i);
+            g_key_file_set_integer(keyfile, "Schedule", item_name,
+                sdata->dow_bits);
+
+            g_snprintf(item_name, 31, "Action%u", i);
+            g_key_file_set_integer(keyfile, "Schedule", item_name,
+                sdata->action ? 1 : 0);
+        }
+    }
+
+    ret = g_key_file_save_to_file(keyfile, PCAT_MANAGER_MAIN_USER_CONFIG_FILE,
+        &error);
+    if(ret)
+    {
+        uconfig_data->dirty = FALSE;
+    }
+    else
+    {
+        g_warning("Failed to save user configuration data to file %s: %s",
+            PCAT_MANAGER_MAIN_USER_CONFIG_FILE, error->message!=NULL ?
+            error->message : "Unknown");
+    }
+
+    g_key_file_unref(keyfile);
 
     return TRUE;
 }
@@ -272,6 +428,11 @@ int main(int argc, char *argv[])
         return 1;
     }
 
+    if(!pcat_main_user_config_data_load())
+    {
+        g_warning("Failed to load user config data, use default one!");
+    }
+
     if(g_pcat_main_cmd_daemonsize)
     {
         daemon(0, 0);
@@ -317,6 +478,11 @@ int main(int argc, char *argv[])
 PCatManagerMainConfigData *pcat_manager_main_config_data_get()
 {
     return &g_pcat_manager_main_config_data;
+}
+
+PCatManagerMainUserConfigData *pcat_manager_main_user_config_data_get()
+{
+    return &g_pcat_manager_main_user_config_data;
 }
 
 void pcat_manager_main_request_shutdown()
