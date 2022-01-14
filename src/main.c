@@ -195,14 +195,14 @@ static gboolean pcat_main_user_config_data_load()
 
         g_snprintf(item_name, 31, "Date%u", i);
         iv = g_key_file_get_integer(keyfile, "Schedule", item_name, NULL);
-        sdata->year = (iv / 10000) & 10000;
-        sdata->month = (iv / 100) & 100;
-        sdata->day = iv & 100;
+        sdata->year = (iv / 10000) % 10000;
+        sdata->month = (iv / 100) % 100;
+        sdata->day = iv % 100;
 
         g_snprintf(item_name, 31, "Time%u", i);
         iv = g_key_file_get_integer(keyfile, "Schedule", item_name, NULL);
-        sdata->hour = (iv / 100) & 100;
-        sdata->minute = iv & 100;
+        sdata->hour = (iv / 100) % 100;
+        sdata->minute = iv % 100;
 
         g_snprintf(item_name, 31, "DOWBits%u", i);
         iv = g_key_file_get_integer(keyfile, "Schedule", item_name, NULL);
