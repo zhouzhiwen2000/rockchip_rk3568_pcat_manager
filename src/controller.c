@@ -428,6 +428,9 @@ static void pcat_controller_command_pmu_status_func(
     child = json_object_new_string("pmu-status");
     json_object_object_add(rroot, "command", child);
 
+    child = json_object_new_int(0);
+    json_object_object_add(rroot, "code", child);
+
     child = json_object_new_int(battery_voltage);
     json_object_object_add(rroot, "battery-voltage", child);
 
@@ -444,13 +447,36 @@ static void pcat_controller_command_pmu_status_func(
         rroot);
 }
 
+static void pcat_controller_command_schedule_power_event_set_func(
+    PCatControllerData *ctrl_data,
+    PCatControllerConnectionData *connection_data, struct json_object *root)
+{
+    struct json_object *rroot, *child;
+
+    rroot = json_object_new_object();
+
+    child = json_object_new_string("schedule-power-event-set");
+    json_object_object_add(rroot, "command", child);
+
+    child = json_object_new_int(0);
+    json_object_object_add(rroot, "code", child);
+
+    pcat_controller_unix_socket_output_json_push(ctrl_data, connection_data,
+        rroot);
+
+    pcat_pmu_manager_schedule_time_update();
+}
+
 static PCatControllerCommandData g_pcat_controller_command_list[] =
 {
     {
         .command = "pmu-status",
         .callback = pcat_controller_command_pmu_status_func
     },
-
+    {
+        .command = "schedule-power-event-set",
+        .callback = pcat_controller_command_schedule_power_event_set_func
+    },
     { NULL, NULL }
 };
 
