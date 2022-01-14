@@ -664,8 +664,8 @@ static void pcat_pmu_serial_read_data_parse(PCatPMUManagerData *pmu_data)
 
             if(pmu_data->serial_write_current_command_data!=NULL)
             {
-                if(pmu_data->serial_write_current_command_data->command==
-                    command+1 &&
+                if(pmu_data->serial_write_current_command_data->command + 1==
+                    command &&
                     pmu_data->serial_write_current_command_data->frame_num==
                     frame_num)
                 {
