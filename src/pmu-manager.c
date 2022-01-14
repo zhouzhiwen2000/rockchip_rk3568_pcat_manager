@@ -303,6 +303,8 @@ static void pcat_pmu_manager_schedule_time_update_internal(
             pcat_pmu_serial_write_data_request(pmu_data,
                 PCAT_PMU_MANAGER_COMMAND_SCHEDULE_STARTUP_TIME_SET, FALSE, 0,
                 startup_setup_buffer->data, startup_setup_buffer->len, TRUE);
+
+            g_message("Updated PMU schedule startup data.");
         }
 
         g_byte_array_unref(startup_setup_buffer);

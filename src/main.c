@@ -187,8 +187,6 @@ static gboolean pcat_main_user_config_data_load()
         else
         {
             sdata->enabled = FALSE;
-
-            continue;
         }
 
         sdata->enable_bits = iv & 0xFF;
