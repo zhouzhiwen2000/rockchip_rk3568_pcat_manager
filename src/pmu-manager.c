@@ -10,6 +10,8 @@
 #include "common.h"
 
 #define PCAT_PMU_MANAGER_STATEFS_BATTERY_PATH "/run/state/namespaces/Battery"
+#define PCAT_PMU_MANAGER_COMMAND_TIMEOUT 1000000L
+#define PCAT_PMU_MANAGER_COMMAND_QUEUE_MAX 128
 
 typedef enum
 {
@@ -30,6 +32,18 @@ typedef enum
     PCAT_PMU_MANAGER_COMMAND_WATCHDOG_TIMEOUT_SET_ACK = 0x14,
 }PCatPMUManagerCommandType;
 
+typedef struct _PCatPMUManagerCommandData
+{
+    GByteArray *buffer;
+    gsize written_size;
+    guint16 command;
+    gboolean need_ack;
+    guint retry_count;
+    guint16 frame_num;
+    gint64 timestamp;
+    gboolean firstrun;
+}PCatPMUManagerCommandData;
+
 typedef struct _PCatPMUManagerData
 {
     gboolean initialized;
@@ -41,7 +55,9 @@ typedef struct _PCatPMUManagerData
     guint serial_read_source;
     guint serial_write_source;
     GByteArray *serial_read_buffer;
-    GByteArray *serial_write_buffer;
+
+    PCatPMUManagerCommandData *serial_write_current_command_data;
+    GQueue *serial_write_command_queue;
     guint16 serial_write_frame_num;
 
     gboolean shutdown_request;
@@ -57,6 +73,22 @@ typedef struct _PCatPMUManagerData
 }PCatPMUManagerData;
 
 static PCatPMUManagerData g_pcat_pmu_manager_data = {0};
+
+static void pcat_pmu_manager_command_data_free(
+    PCatPMUManagerCommandData *data)
+{
+    if(data==NULL)
+    {
+        return;
+    }
+
+    if(data->buffer!=NULL)
+    {
+        g_byte_array_unref(data->buffer);
+    }
+
+    g_free(data);
+}
 
 static inline guint16 pcat_pmu_serial_compute_crc16(const guint8 *data,
     gsize len)
@@ -89,35 +121,99 @@ static gboolean pcat_pmu_serial_write_watch_func(GIOChannel *source,
 {
     PCatPMUManagerData *pmu_data = (PCatPMUManagerData *)user_data;
     gssize wsize;
-    gsize total_write_size = 0;
     guint remaining_size;
     gboolean ret = FALSE;
+    gint64 now;
+    GByteArray *buffer;
+
+    now = g_get_monotonic_time();
 
     do
     {
-        if(pmu_data->serial_write_buffer->len <= total_write_size)
+        if(pmu_data->serial_write_current_command_data==NULL)
+        {
+            pmu_data->serial_write_current_command_data =
+                g_queue_pop_head(pmu_data->serial_write_command_queue);
+        }
+        if(pmu_data->serial_write_current_command_data==NULL)
         {
             break;
         }
+        if(!pmu_data->serial_write_current_command_data->firstrun &&
+            pmu_data->serial_write_current_command_data->written_size==0)
+        {
+            if(now <= pmu_data->serial_write_current_command_data->timestamp +
+                PCAT_PMU_MANAGER_COMMAND_TIMEOUT)
+            {
+                break;
+            }
+            else if(
+                pmu_data->serial_write_current_command_data->retry_count==0)
+            {
+                pcat_pmu_manager_command_data_free(
+                    pmu_data->serial_write_current_command_data);
+                pmu_data->serial_write_current_command_data = NULL;
 
-        remaining_size = pmu_data->serial_write_buffer->len -
-            total_write_size;
+                continue;
+            }
+        }
+
+        buffer = pmu_data->serial_write_current_command_data->buffer;
+
+        if(buffer->len <=
+           pmu_data->serial_write_current_command_data->written_size)
+        {
+            if(pmu_data->serial_write_current_command_data->need_ack)
+            {
+                break;
+            }
+            else
+            {
+                pcat_pmu_manager_command_data_free(
+                    pmu_data->serial_write_current_command_data);
+                pmu_data->serial_write_current_command_data = NULL;
+
+                continue;
+            }
+        }
+
+        remaining_size = buffer->len -
+            pmu_data->serial_write_current_command_data->written_size;
 
         wsize = write(pmu_data->serial_fd,
-            pmu_data->serial_write_buffer->data + total_write_size,
+            buffer->data +
+            pmu_data->serial_write_current_command_data->written_size,
             remaining_size > 4096 ? 4096 : remaining_size);
 
         if(wsize > 0)
         {
-            total_write_size+=wsize;
+            pmu_data->serial_write_current_command_data->written_size += wsize;
+            pmu_data->serial_write_current_command_data->timestamp = now;
+            pmu_data->serial_write_current_command_data->firstrun = FALSE;
+        }
+        else
+        {
+            break;
         }
     }
-    while(wsize > 0);
+    while(1);
 
-    if(total_write_size > 0)
+    if(pmu_data->serial_write_current_command_data!=NULL &&
+       pmu_data->serial_write_current_command_data->written_size >=
+       pmu_data->serial_write_current_command_data->buffer->len)
     {
-        g_byte_array_remove_range(pmu_data->serial_write_buffer, 0,
-            total_write_size);
+        if(pmu_data->serial_write_current_command_data->need_ack &&
+           pmu_data->serial_write_current_command_data->retry_count > 0)
+        {
+            pmu_data->serial_write_current_command_data->retry_count--;
+            pmu_data->serial_write_current_command_data->written_size = 0;
+        }
+        else
+        {
+            pcat_pmu_manager_command_data_free(
+                pmu_data->serial_write_current_command_data);
+            pmu_data->serial_write_current_command_data = NULL;
+        }
     }
 
     if(wsize < 0)
@@ -148,6 +244,7 @@ static void pcat_pmu_serial_write_data_request(
     GByteArray *ba;
     guint16 sv;
     guint16 dp_size;
+    PCatPMUManagerCommandData *new_data, *old_data;
 
     ba = g_byte_array_new();
 
@@ -160,6 +257,7 @@ static void pcat_pmu_serial_write_data_request(
     }
     else
     {
+        frame_num = pmu_data->serial_write_frame_num;
         sv = pmu_data->serial_write_frame_num;
         sv = GUINT16_TO_LE(sv);
         g_byte_array_append(ba, (const guint8 *)&sv, 2);
@@ -203,14 +301,29 @@ static void pcat_pmu_serial_write_data_request(
 
     g_byte_array_append(ba, (const guint8 *)"\x5A", 1);
 
-    if(pmu_data->serial_write_buffer->len > 131072)
+    while(g_queue_get_length(pmu_data->serial_write_command_queue) >
+       PCAT_PMU_MANAGER_COMMAND_QUEUE_MAX)
     {
-        g_byte_array_remove_range(pmu_data->serial_write_buffer, 0, 65536);
+        old_data = g_queue_pop_head(pmu_data->serial_write_command_queue);
+        pcat_pmu_manager_command_data_free(old_data);
     }
 
-    g_byte_array_append(pmu_data->serial_write_buffer, ba->data, ba->len);
+    new_data = g_new0(PCatPMUManagerCommandData, 1);
+    new_data->buffer = ba;
+    new_data->timestamp = g_get_monotonic_time();
+    new_data->need_ack = need_ack;
+    new_data->retry_count = need_ack ? 3 : 1;
+    new_data->frame_num = frame_num;
+    new_data->command = command;
+    new_data->firstrun = TRUE;
 
-    g_byte_array_unref(ba);
+    g_queue_push_tail(pmu_data->serial_write_command_queue, new_data);
+
+    if(pmu_data->serial_write_current_command_data==NULL)
+    {
+        pmu_data->serial_write_current_command_data = g_queue_pop_head(
+            pmu_data->serial_write_command_queue);
+    }
 
     if(pmu_data->serial_write_source==0)
     {
@@ -549,6 +662,19 @@ static void pcat_pmu_serial_read_data_parse(PCatPMUManagerData *pmu_data)
 
             g_debug("Got command %X from %X to %X.", command, src, dst);
 
+            if(pmu_data->serial_write_current_command_data!=NULL)
+            {
+                if(pmu_data->serial_write_current_command_data->command==
+                    command+1 &&
+                    pmu_data->serial_write_current_command_data->frame_num==
+                    frame_num)
+                {
+                    pcat_pmu_manager_command_data_free(
+                        pmu_data->serial_write_current_command_data);
+                    pmu_data->serial_write_current_command_data = NULL;
+                }
+            }
+
             if(dst==0x1 || dst==0x80 || dst==0xFF)
             {
                 switch(command)
@@ -752,8 +878,9 @@ static gboolean pcat_pmu_serial_open(PCatPMUManagerData *pmu_data)
 
     pmu_data->serial_fd = fd;
     pmu_data->serial_channel = channel;
+    pmu_data->serial_write_current_command_data = NULL;
     pmu_data->serial_read_buffer = g_byte_array_new();
-    pmu_data->serial_write_buffer = g_byte_array_new();
+    pmu_data->serial_write_command_queue = g_queue_new();
 
     pmu_data->serial_read_source = g_io_add_watch(channel,
         G_IO_IN, pcat_pmu_serial_read_watch_func, pmu_data);
@@ -790,10 +917,17 @@ static void pcat_pmu_serial_close(PCatPMUManagerData *pmu_data)
         pmu_data->serial_fd = -1;
     }
 
-    if(pmu_data->serial_write_buffer!=NULL)
+    if(pmu_data->serial_write_current_command_data!=NULL)
     {
-        g_byte_array_unref(pmu_data->serial_write_buffer);
-        pmu_data->serial_write_buffer = NULL;
+        pcat_pmu_manager_command_data_free(
+            pmu_data->serial_write_current_command_data);
+        pmu_data->serial_write_current_command_data = NULL;
+    }
+    if(pmu_data->serial_write_command_queue!=NULL)
+    {
+        g_queue_free_full(pmu_data->serial_write_command_queue,
+            (GDestroyNotify)pcat_pmu_manager_command_data_free);
+        pmu_data->serial_write_command_queue = NULL;
     }
 
     if(pmu_data->serial_read_buffer!=NULL)
@@ -812,11 +946,14 @@ static gboolean pcat_pmu_manager_check_timeout_func(gpointer user_data)
     GDateTime *dt;
     gboolean need_action = FALSE;
     guint dow;
+    gint64 now;
 
     if(pmu_data->serial_channel==NULL)
     {
         return TRUE;
     }
+
+    now = g_get_monotonic_time();
 
     if(!pmu_data->reboot_request && !pmu_data->shutdown_request)
     {
@@ -918,9 +1055,20 @@ static gboolean pcat_pmu_manager_check_timeout_func(gpointer user_data)
         }
     }
 
-    if(pmu_data->serial_write_buffer!=NULL &&
-       pmu_data->serial_write_buffer->len > 0 &&
-       pmu_data->serial_write_source==0)
+    if(pmu_data->serial_write_source==0 &&
+       pmu_data->serial_write_current_command_data==NULL &&
+       !g_queue_is_empty(pmu_data->serial_write_command_queue))
+    {
+        pmu_data->serial_write_source = g_io_add_watch(
+            pmu_data->serial_channel, G_IO_OUT,
+            pcat_pmu_serial_write_watch_func, pmu_data);
+    }
+
+    if(pmu_data->serial_write_source==0 &&
+       pmu_data->serial_write_current_command_data!=NULL &&
+        (pmu_data->serial_write_current_command_data->firstrun ||
+        now > pmu_data->serial_write_current_command_data->timestamp +
+        PCAT_PMU_MANAGER_COMMAND_TIMEOUT))
     {
         pmu_data->serial_write_source = g_io_add_watch(
             pmu_data->serial_channel, G_IO_OUT,
@@ -932,8 +1080,6 @@ static gboolean pcat_pmu_manager_check_timeout_func(gpointer user_data)
 
 gboolean pcat_pmu_manager_init()
 {
-
-
     if(g_pcat_pmu_manager_data.initialized)
     {
         return TRUE;
@@ -1015,7 +1161,7 @@ void pcat_pmu_manager_watchdog_timeout_set(guint timeout)
     }
 
     if(g_pcat_pmu_manager_data.serial_channel==NULL ||
-        g_pcat_pmu_manager_data.serial_write_buffer==NULL)
+        g_pcat_pmu_manager_data.serial_write_command_queue==NULL)
     {
         return;
     }
