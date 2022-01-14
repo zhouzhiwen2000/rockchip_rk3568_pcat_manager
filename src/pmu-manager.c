@@ -957,8 +957,8 @@ gboolean pcat_pmu_manager_init()
     g_pcat_pmu_manager_data.initialized = TRUE;
 
     pcat_pmu_manager_watchdog_timeout_set(5);
-    pcat_pmu_manager_date_time_sync(&g_pcat_pmu_manager_data);
     pcat_pmu_manager_schedule_time_update_internal(&g_pcat_pmu_manager_data);
+    pcat_pmu_manager_date_time_sync(&g_pcat_pmu_manager_data);
 
     return TRUE;
 }
