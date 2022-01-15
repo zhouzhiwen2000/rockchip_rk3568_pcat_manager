@@ -489,3 +489,7 @@ void pcat_manager_main_request_shutdown()
     g_spawn_command_line_async("poweroff", NULL);
 }
 
+void pcat_manager_main_user_config_data_sync()
+{
+    pcat_main_user_config_data_save();
+}

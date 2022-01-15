@@ -45,7 +45,6 @@ typedef struct _PCatManagerPowerScheduleData
     guint8 day;
     guint8 hour;
     guint8 minute;
-    guint8 second;
     guint8 dow_bits;
 }PCatManagerPowerScheduleData;
 
@@ -59,6 +58,7 @@ typedef struct _PCatManagerMainUserConfigData
 
 PCatManagerMainConfigData *pcat_manager_main_config_data_get();
 PCatManagerMainUserConfigData *pcat_manager_main_user_config_data_get();
+void pcat_manager_main_user_config_data_sync();
 void pcat_manager_main_request_shutdown();
 
 G_END_DECLS

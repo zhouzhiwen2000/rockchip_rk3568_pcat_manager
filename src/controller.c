@@ -347,7 +347,6 @@ static gboolean pcat_controller_unix_socket_input_watch_func(
     return ret;
 }
 
-
 static gboolean pcat_controller_unix_socket_incoming_func(
     GSocketService *service, GSocketConnection *connection,
     GObject *source_object, gpointer user_data)
@@ -451,7 +450,105 @@ static void pcat_controller_command_schedule_power_event_set_func(
     PCatControllerData *ctrl_data,
     PCatControllerConnectionData *connection_data, struct json_object *root)
 {
-    struct json_object *rroot, *child;
+    struct json_object *rroot, *child, *array, *node;
+    guint array_len;
+    guint i;
+    gint iv;
+    PCatManagerPowerScheduleData *sdata;
+    PCatManagerMainUserConfigData *uconfig_data;
+    guint count_on = 0, count_off = 0;
+    gboolean action;
+
+    uconfig_data = pcat_manager_main_user_config_data_get();
+
+    if(uconfig_data->power_schedule_data!=NULL)
+    {
+        g_ptr_array_unref(uconfig_data->power_schedule_data);
+        uconfig_data->power_schedule_data = NULL;
+    }
+
+    if(json_object_object_get_ex(root, "event-list", &array))
+    {
+        array_len = json_object_array_length(array);
+
+        if(array_len > 0)
+        {
+            for(i=0;i<array_len;i++)
+            {
+                node = json_object_array_get_idx(array, i);
+                if(node==NULL)
+                {
+                    continue;
+                }
+
+                if(json_object_object_get_ex(node, "action", &child))
+                {
+                    action = (json_object_get_int(child)!=0);
+                }
+                if(action)
+                {
+                    count_on++;
+
+                    if(count_on > 6)
+                    {
+                        continue;
+                    }
+                }
+                else
+                {
+                    count_off++;
+
+                    if(count_off > 6)
+                    {
+                        continue;
+                    }
+                }
+
+                sdata = g_new0(PCatManagerPowerScheduleData, 1);
+                sdata->action = action;
+
+                if(json_object_object_get_ex(node, "enabled", &child))
+                {
+                    iv = json_object_get_int(child);
+                    sdata->enabled = (iv!=0);
+                    sdata->enable_bits = (iv!=0 ?
+                        PCAT_MANAGER_POWER_SCHEDULE_ENABLE_MINUTE : 0);
+                }
+                if(json_object_object_get_ex(node, "enable-bits", &child))
+                {
+                    iv = json_object_get_int(child);
+                    sdata->enable_bits |= (iv & 0xFF);
+                }
+                if(json_object_object_get_ex(node, "year", &child))
+                {
+                    sdata->year = json_object_get_int(child);
+                }
+                if(json_object_object_get_ex(node, "month", &child))
+                {
+                    sdata->month = json_object_get_int(child);
+                }
+                if(json_object_object_get_ex(node, "day", &child))
+                {
+                    sdata->day = json_object_get_int(child);
+                }
+                if(json_object_object_get_ex(node, "hour", &child))
+                {
+                    sdata->hour = json_object_get_int(child);
+                }
+                if(json_object_object_get_ex(node, "minute", &child))
+                {
+                    sdata->minute = json_object_get_int(child);
+                }
+                if(json_object_object_get_ex(node, "dow-bits", &child))
+                {
+                    sdata->dow_bits = json_object_get_int(child) & 0xFF;
+                }
+
+                g_ptr_array_add(uconfig_data->power_schedule_data, sdata);
+            }
+        }
+    }
+    pcat_manager_main_user_config_data_sync();
 
     rroot = json_object_new_object();
 
@@ -467,6 +564,72 @@ static void pcat_controller_command_schedule_power_event_set_func(
     pcat_pmu_manager_schedule_time_update();
 }
 
+static void pcat_controller_command_schedule_power_event_get_func(
+    PCatControllerData *ctrl_data,
+    PCatControllerConnectionData *connection_data, struct json_object *root)
+{
+    struct json_object *rroot, *child, *array, *node;
+    guint i;
+    PCatManagerPowerScheduleData *sdata;
+    PCatManagerMainUserConfigData *uconfig_data;
+
+    uconfig_data = pcat_manager_main_user_config_data_get();
+
+    rroot = json_object_new_object();
+
+    child = json_object_new_string("schedule-power-event-get");
+    json_object_object_add(rroot, "command", child);
+
+    child = json_object_new_int(0);
+    json_object_object_add(rroot, "code", child);
+
+    array = json_object_new_array();
+
+    if(uconfig_data->power_schedule_data!=NULL)
+    {
+        for(i=0;i<uconfig_data->power_schedule_data->len;i++)
+        {
+            sdata = g_ptr_array_index(uconfig_data->power_schedule_data, i);
+            node = json_object_new_object();
+
+            child = json_object_new_int(sdata->enabled ? 1 : 0);
+            json_object_object_add(node, "enabled", child);
+
+            child = json_object_new_int(sdata->enable_bits);
+            json_object_object_add(node, "enable-bits", child);
+
+            child = json_object_new_int(sdata->action ? 1 : 0);
+            json_object_object_add(node, "action", child);
+
+            child = json_object_new_int(sdata->year);
+            json_object_object_add(node, "year", child);
+
+            child = json_object_new_int(sdata->month);
+            json_object_object_add(node, "month", child);
+
+            child = json_object_new_int(sdata->day);
+            json_object_object_add(node, "day", child);
+
+            child = json_object_new_int(sdata->hour);
+            json_object_object_add(node, "hour", child);
+
+            child = json_object_new_int(sdata->minute);
+            json_object_object_add(node, "minute", child);
+
+            child = json_object_new_int(sdata->dow_bits);
+            json_object_object_add(node, "dow-bits", child);
+
+            json_object_array_add(array, node);
+        }
+    }
+
+    json_object_object_add(rroot, "event-list", array);
+
+    pcat_controller_unix_socket_output_json_push(ctrl_data, connection_data,
+        rroot);
+
+}
+
 static PCatControllerCommandData g_pcat_controller_command_list[] =
 {
     {
@@ -476,6 +639,10 @@ static PCatControllerCommandData g_pcat_controller_command_list[] =
     {
         .command = "schedule-power-event-set",
         .callback = pcat_controller_command_schedule_power_event_set_func
+    },
+    {
+        .command = "schedule-power-event-get",
+        .callback = pcat_controller_command_schedule_power_event_get_func
     },
     { NULL, NULL }
 };
