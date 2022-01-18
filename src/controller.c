@@ -4,6 +4,7 @@
 #include <json.h>
 #include "controller.h"
 #include "pmu-manager.h"
+#include "modem-manager.h"
 #include "common.h"
 
 #define PCAT_CONTROLLER_SOCKET_FILE "/tmp/pcat-manager.sock"
@@ -444,6 +445,7 @@ static void pcat_controller_command_pmu_status_func(
 
     pcat_controller_unix_socket_output_json_push(ctrl_data, connection_data,
         rroot);
+    json_object_put(rroot);
 }
 
 static void pcat_controller_command_schedule_power_event_set_func(
@@ -560,6 +562,7 @@ static void pcat_controller_command_schedule_power_event_set_func(
 
     pcat_controller_unix_socket_output_json_push(ctrl_data, connection_data,
         rroot);
+    json_object_put(rroot);
 
     pcat_pmu_manager_schedule_time_update();
 }
@@ -627,7 +630,124 @@ static void pcat_controller_command_schedule_power_event_get_func(
 
     pcat_controller_unix_socket_output_json_push(ctrl_data, connection_data,
         rroot);
+    json_object_put(rroot);
+}
 
+static void pcat_controller_command_modem_status_get_func(
+    PCatControllerData *ctrl_data,
+    PCatControllerConnectionData *connection_data, struct json_object *root)
+{
+    struct json_object *rroot, *child;
+    PCatModemManagerMode mode = PCAT_MODEM_MANAGER_MODE_NONE;
+    PCatModemManagerSIMState sim_state = PCAT_MODEM_MANAGER_SIM_STATE_ABSENT;
+    gint signal_strength = 0;
+    gchar *isp_name = NULL;
+    gchar *isp_plmn = NULL;
+    gint code = 0;
+    const gchar *mode_str = "none", *sim_state_str = "absent";
+
+    rroot = json_object_new_object();
+    child = json_object_new_string("modem-status-get");
+    json_object_object_add(rroot, "command", child);
+
+    if(!pcat_modem_manager_status_get(&mode, &sim_state, &signal_strength,
+        &isp_name, &isp_plmn))
+    {
+        code = 1;
+    }
+
+    child = json_object_new_int(code);
+    json_object_object_add(rroot, "code", child);
+
+    switch(mode)
+    {
+        case PCAT_MODEM_MANAGER_MODE_2G:
+        {
+            mode_str = "2g";
+            break;
+        }
+        case PCAT_MODEM_MANAGER_MODE_3G:
+        {
+            mode_str = "3g";
+            break;
+        }
+        case PCAT_MODEM_MANAGER_MODE_LTE:
+        {
+            mode_str = "lte";
+            break;
+        }
+        case PCAT_MODEM_MANAGER_MODE_5G:
+        {
+            mode_str = "5g";
+            break;
+        }
+        default:
+        {
+            break;
+        }
+    }
+
+    switch(sim_state)
+    {
+        case PCAT_MODEM_MANAGER_SIM_STATE_ABSENT:
+        {
+            sim_state_str = "absent";
+            break;
+        }
+        case PCAT_MODEM_MANAGER_SIM_STATE_NOT_READY:
+        {
+            sim_state_str = "not-ready";
+            break;
+        }
+        case PCAT_MODEM_MANAGER_SIM_STATE_READY:
+        {
+            sim_state_str = "ready";
+            break;
+        }
+        case PCAT_MODEM_MANAGER_SIM_STATE_PIN:
+        {
+            sim_state_str = "need-pin";
+            break;
+        }
+        case PCAT_MODEM_MANAGER_SIM_STATE_PUK:
+        {
+            sim_state_str = "need-puk";
+            break;
+        }
+        case PCAT_MODEM_MANAGER_SIM_STATE_NETWORK_PERSONALIZATION:
+        {
+            sim_state_str = "personalized-network";
+            break;
+        }
+        case PCAT_MODEM_MANAGER_SIM_STATE_BAD:
+        {
+            sim_state_str = "bad";
+            break;
+        }
+        default:
+        {
+            break;
+        }
+    }
+
+    child = json_object_new_string(mode_str);
+    json_object_object_add(rroot, "mode", child);
+
+    child = json_object_new_string(sim_state_str);
+    json_object_object_add(rroot, "sim-state", child);
+
+    child = json_object_new_string(isp_name!=NULL ? isp_name : "");
+    json_object_object_add(rroot, "isp-name", child);
+
+    child = json_object_new_string(isp_plmn!=NULL ? isp_plmn : "");
+    json_object_object_add(rroot, "isp-lpmn", child);
+
+    g_free(isp_name);
+    g_free(isp_plmn);
+
+    pcat_controller_unix_socket_output_json_push(ctrl_data, connection_data,
+        rroot);
+    json_object_put(rroot);
 }
 
 static PCatControllerCommandData g_pcat_controller_command_list[] =
@@ -643,6 +763,10 @@ static PCatControllerCommandData g_pcat_controller_command_list[] =
     {
         .command = "schedule-power-event-get",
         .callback = pcat_controller_command_schedule_power_event_get_func
+    },
+    {
+        .command = "modem-status-get",
+        .callback = pcat_controller_command_modem_status_get_func,
     },
     { NULL, NULL }
 };

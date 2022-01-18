@@ -25,25 +25,6 @@ typedef enum
     PCAT_MODEM_MANAGER_DEVICE_5G
 }PCatModemManagerDeviceType;
 
-typedef enum
-{
-    PCAT_MODEM_MANAGER_MODE_NONE,
-    PCAT_MODEM_MANAGER_MODE_2G,
-    PCAT_MODEM_MANAGER_MODE_3G,
-    PCAT_MODEM_MANAGER_MODE_LTE,
-    PCAT_MODEM_MANAGER_MODE_5G
-}PCatModemManagerMode;
-
-typedef enum {
-    PCAT_MODEM_MANAGER_SIM_STATE_ABSENT = 0,
-    PCAT_MODEM_MANAGER_SIM_STATE_NOT_READY = 1,
-    PCAT_MODEM_MANAGER_SIM_STATE_READY = 2,
-    PCAT_MODEM_MANAGER_SIM_STATE_PIN = 3,
-    PCAT_MODEM_MANAGER_SIM_STATE_PUK = 4,
-    PCAT_MODEM_MANAGER_SIM_STATE_NETWORK_PERSONALIZATION = 5,
-    PCAT_MODEM_MANAGER_SIM_STATE_BAD = 6,
-}PCatModemManagerSIMState;
-
 typedef struct _PCatModemManagerUSBData
 {
     PCatModemManagerDeviceType device_type;
@@ -64,6 +45,8 @@ typedef struct _PCatModemManagerData
     PCatModemManagerMode modem_mode;
     gint modem_signal_strength;
     PCatModemManagerSIMState sim_state;
+    gchar *isp_name;
+    gchar *isp_plmn;
 
     libusb_context *usb_ctx;
 
@@ -313,6 +296,7 @@ static inline void pcat_modem_manager_external_control_exec_line_parser(
     gint signal_raw;
     gint signal_value;
     gint sim_state;
+    gint isp_name_is_ucs2 = 0;
 
     if(mm_data->external_control_exec_stdout_log_file!=NULL)
     {
@@ -460,6 +444,34 @@ static inline void pcat_modem_manager_external_control_exec_line_parser(
                                 sim_state);
                         }
 
+                    }
+                }
+                else if(g_strcmp0(cmd, "ISPINFO")==0)
+                {
+                    value_raw_str = g_hash_table_lookup(table, "ALPHABET");
+                    if(value_raw_str!=NULL)
+                    {
+                        sscanf(value_raw_str, "%d", &isp_name_is_ucs2);
+                    }
+
+                    value_raw_str = g_hash_table_lookup(table, "FNN");
+                    if(value_raw_str!=NULL)
+                    {
+                        if(mm_data->isp_name!=NULL)
+                        {
+                            g_free(mm_data->isp_name);
+                        }
+                        mm_data->isp_name = g_strdup(value_raw_str);
+                    }
+
+                    value_raw_str = g_hash_table_lookup(table, "RPLMN");
+                    if(value_raw_str!=NULL)
+                    {
+                        if(mm_data->isp_plmn!=NULL)
+                        {
+                            g_free(mm_data->isp_plmn);
+                        }
+                        mm_data->isp_plmn = g_strdup(value_raw_str);
                     }
                 }
 
@@ -881,5 +893,52 @@ void pcat_modem_manager_uninit()
     }
 
     g_pcat_modem_manager_data.initialized = FALSE;
+}
+
+gboolean pcat_modem_manager_status_get(PCatModemManagerMode *mode,
+    PCatModemManagerSIMState *sim_state, gint *signal_strength,
+    gchar **isp_name, gchar **isp_plmn)
+{
+    if(!g_pcat_modem_manager_data.initialized)
+    {
+        return FALSE;
+    }
+
+    if(mode!=NULL)
+    {
+        *mode = g_pcat_modem_manager_data.modem_mode;
+    }
+    if(sim_state!=NULL)
+    {
+        *sim_state = g_pcat_modem_manager_data.sim_state;
+    }
+    if(signal_strength!=NULL)
+    {
+        *signal_strength = g_pcat_modem_manager_data.modem_signal_strength;
+    }
+    if(isp_name!=NULL)
+    {
+        if(g_pcat_modem_manager_data.modem_mode!=PCAT_MODEM_MANAGER_MODE_NONE)
+        {
+            *isp_name = g_strdup(g_pcat_modem_manager_data.isp_name);
+        }
+        else
+        {
+            *isp_name = NULL;
+        }
+    }
+    if(isp_plmn!=NULL)
+    {
+        if(g_pcat_modem_manager_data.modem_mode!=PCAT_MODEM_MANAGER_MODE_NONE)
+        {
+            *isp_plmn = g_strdup(g_pcat_modem_manager_data.isp_plmn);
+        }
+        else
+        {
+            *isp_plmn = NULL;
+        }
+    }
+
+    return TRUE;
 }
 
