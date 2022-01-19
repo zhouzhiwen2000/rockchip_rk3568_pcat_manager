@@ -23,6 +23,7 @@ executable('pcat-manager',
         gio2_unix_deps,
         libusb1_deps,
         jsonc_deps,
-        gpiod_deps
+        gpiod_deps,
+        thread_deps
     ]
 )

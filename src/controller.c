@@ -750,6 +750,50 @@ static void pcat_controller_command_modem_status_get_func(
     json_object_put(rroot);
 }
 
+static void pcat_controller_command_network_route_mode_get_func(
+    PCatControllerData *ctrl_data,
+    PCatControllerConnectionData *connection_data, struct json_object *root)
+{
+    struct json_object *rroot, *child;
+    PCatManagerRouteMode mode;
+    const gchar *mode_str = "none";
+
+    rroot = json_object_new_object();
+
+    mode = pcat_manager_main_network_route_mode_get();
+
+    switch(mode)
+    {
+        case PCAT_MANAGER_ROUTE_MODE_WIRED:
+        {
+            mode_str = "wired";
+            break;
+        }
+        case PCAT_MANAGER_ROUTE_MODE_MOBILE:
+        {
+            mode_str = "mobile";
+            break;
+        }
+        default:
+        {
+            break;
+        }
+    }
+
+    child = json_object_new_string("network-route-mode-get");
+    json_object_object_add(rroot, "command", child);
+
+    child = json_object_new_int(0);
+    json_object_object_add(rroot, "code", child);
+
+    child = json_object_new_string(mode_str);
+    json_object_object_add(rroot, "mode", child);
+
+    pcat_controller_unix_socket_output_json_push(ctrl_data, connection_data,
+        rroot);
+    json_object_put(rroot);
+}
+
 static PCatControllerCommandData g_pcat_controller_command_list[] =
 {
     {
@@ -767,6 +811,10 @@ static PCatControllerCommandData g_pcat_controller_command_list[] =
     {
         .command = "modem-status-get",
         .callback = pcat_controller_command_modem_status_get_func,
+    },
+    {
+        .command = "network-route-mode-get",
+        .callback = pcat_controller_command_network_route_mode_get_func,
     },
     { NULL, NULL }
 };

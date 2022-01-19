@@ -15,6 +15,13 @@ typedef enum
     PCAT_MANAGER_POWER_SCHEDULE_ENABLE_DOW = (1 << 5) /* Day of week */
 }PCatManagerTimeEnableBits;
 
+typedef enum
+{
+    PCAT_MANAGER_ROUTE_MODE_NONE,
+    PCAT_MANAGER_ROUTE_MODE_WIRED,
+    PCAT_MANAGER_ROUTE_MODE_MOBILE
+}PCatManagerRouteMode;
+
 typedef struct _PCatManagerMainConfigData
 {
     gboolean valid;
@@ -60,6 +67,7 @@ PCatManagerMainConfigData *pcat_manager_main_config_data_get();
 PCatManagerMainUserConfigData *pcat_manager_main_user_config_data_get();
 void pcat_manager_main_user_config_data_sync();
 void pcat_manager_main_request_shutdown();
+PCatManagerRouteMode pcat_manager_main_network_route_mode_get();
 
 G_END_DECLS
 

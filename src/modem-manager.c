@@ -443,7 +443,6 @@ static inline void pcat_modem_manager_external_control_exec_line_parser(
                             g_message("SIM card state changed to %d.",
                                 sim_state);
                         }
-
                     }
                 }
                 else if(g_strcmp0(cmd, "ISPINFO")==0)

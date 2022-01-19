@@ -1,8 +1,12 @@
 #include <unistd.h>
+#include <string.h>
 #include <stdio.h>
 #include <signal.h>
 #include <glib.h>
 #include <glib-unix.h>
+#include <pthread.h>
+#include <errno.h>
+#include <json.h>
 #include "common.h"
 #include "modem-manager.h"
 #include "pmu-manager.h"
@@ -11,6 +15,13 @@
 #define PCAT_MANAGER_MAIN_CONFIG_FILE "/etc/pcat-manager.conf"
 #define PCAT_MANAGER_MAIN_USER_CONFIG_FILE "/etc/pcat-manager-userdata.conf"
 #define PCAT_MANAGER_MAIN_SHUTDOWN_REQUEST_FILE "/tmp/pcat-shutdown.tmp"
+
+#define PCAT_MANAGER_MAIN_WIRED_IFACE "wan"
+#define PCAT_MANAGER_MAIN_WIRED_V6_IFACE "wan6"
+#define PCAT_MANAGER_MAIN_MOBILE_5G_IFACE "wwan_5g"
+#define PCAT_MANAGER_MAIN_MOBILE_5G_V6_IFACE "wwan_5g_v6"
+#define PCAT_MANAGER_MAIN_MOBILE_LTE_IFACE "wwan_lte"
+#define PCAT_MANAGER_MAIN_MOBILE_LTE_V6_IFACE "wwan_lte_v6"
 
 static const guint g_pcat_main_shutdown_wait_max = 30;
 
@@ -22,6 +33,10 @@ static gboolean g_pcat_main_reboot = FALSE;
 static gboolean g_pcat_main_request_shutdown = FALSE;
 static guint g_pcat_main_shutdown_wait_count = 0;
 static gboolean g_pcat_main_watchdog_disabled = FALSE;
+
+static PCatManagerRouteMode g_pcat_main_network_route_mode =
+    PCAT_MANAGER_ROUTE_MODE_NONE;
+static gboolean g_pcat_main_mwan_route_check_flag = TRUE;
 
 static PCatManagerMainConfigData g_pcat_manager_main_config_data = {0};
 static PCatManagerMainUserConfigData g_pcat_manager_main_user_config_data =
@@ -405,10 +420,203 @@ static gboolean pcat_main_sigusr1_func(gpointer user_data)
     return TRUE;
 }
 
+static void *pcat_main_mwan_policy_check_thread_func(void *user_data)
+{
+    guint i;
+    gchar *mwan3_stdout = NULL;
+    struct json_tokener *tokener;
+    struct json_object *root, *child, *protocol, *policies, *rules, *rule;
+    guint rules_len;
+    const gchar *iface, *upercent;
+    guint percent;
+    gboolean ret;
+
+    while(g_pcat_main_mwan_route_check_flag)
+    {
+        g_spawn_command_line_sync("ubus call mwan3 status", &mwan3_stdout,
+            NULL, NULL, NULL);
+
+        ret = FALSE;
+
+        G_STMT_START
+        {
+            if(mwan3_stdout==NULL)
+            {
+                break;
+            }
+
+            tokener = json_tokener_new();
+            root = json_tokener_parse_ex(tokener, mwan3_stdout,
+                strlen(mwan3_stdout));
+            json_tokener_free(tokener);
+
+            if(root==NULL)
+            {
+                break;
+            }
+
+            if(!json_object_object_get_ex(root, "policies", &policies))
+            {
+                json_object_put(root);
+
+                break;
+            }
+
+            if(json_object_object_get_ex(policies, "ipv4", &protocol))
+            {
+                if(json_object_object_get_ex(protocol, "balanced", &rules))
+                {
+                    rules_len = json_object_array_length(rules);
+
+                    for(i=0;i<rules_len;i++)
+                    {
+                        rule = json_object_array_get_idx(rules, i);
+                        iface = NULL;
+                        percent = 0;
+
+                        if(json_object_object_get_ex(rule, "interface",
+                            &child))
+                        {
+                            iface = json_object_get_string(child);
+                        }
+                        if(json_object_object_get_ex(rule, "percent",
+                            &child))
+                        {
+                            upercent = json_object_get_string(child);
+
+                            if(upercent!=NULL)
+                            {
+                                sscanf(upercent, "%d", &percent);
+                            }
+                        }
+
+                        if(percent > 0)
+                        {
+                            if(g_strcmp0(iface,
+                                PCAT_MANAGER_MAIN_WIRED_IFACE)==0)
+                            {
+                                g_pcat_main_network_route_mode =
+                                    PCAT_MANAGER_ROUTE_MODE_WIRED;
+                                ret = TRUE;
+                            }
+                            else if(g_strcmp0(iface,
+                                PCAT_MANAGER_MAIN_MOBILE_5G_IFACE)==0)
+                            {
+                                g_pcat_main_network_route_mode =
+                                    PCAT_MANAGER_ROUTE_MODE_MOBILE;
+                                ret = TRUE;
+                            }
+                            else if(g_strcmp0(iface,
+                                PCAT_MANAGER_MAIN_MOBILE_LTE_IFACE)==0)
+                            {
+                                g_pcat_main_network_route_mode =
+                                    PCAT_MANAGER_ROUTE_MODE_MOBILE;
+                                ret = TRUE;
+                            }
+                        }
+
+                        if(ret)
+                        {
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if(ret)
+            {
+                json_object_put(root);
+
+                break;
+            }
+
+            if(json_object_object_get_ex(policies, "ipv6", &protocol))
+            {
+                if(json_object_object_get_ex(protocol, "balanced", &rules))
+                {
+                    rules_len = json_object_array_length(rules);
+
+                    for(i=0;i<rules_len;i++)
+                    {
+                        rule = json_object_array_get_idx(rules, i);
+                        iface = NULL;
+                        percent = 0;
+
+                        if(json_object_object_get_ex(rule, "interface",
+                            &child))
+                        {
+                            iface = json_object_get_string(child);
+                        }
+                        if(json_object_object_get_ex(rule, "percent",
+                            &child))
+                        {
+                            upercent = json_object_get_string(child);
+
+                            if(upercent!=NULL)
+                            {
+                                sscanf(upercent, "%d", &percent);
+                            }
+                        }
+
+                        if(percent > 0)
+                        {
+                            if(g_strcmp0(iface,
+                                PCAT_MANAGER_MAIN_WIRED_V6_IFACE)==0)
+                            {
+                                g_pcat_main_network_route_mode =
+                                    PCAT_MANAGER_ROUTE_MODE_WIRED;
+                                ret = TRUE;
+                            }
+                            else if(g_strcmp0(iface,
+                                PCAT_MANAGER_MAIN_MOBILE_5G_V6_IFACE)==0)
+                            {
+                                g_pcat_main_network_route_mode =
+                                    PCAT_MANAGER_ROUTE_MODE_MOBILE;
+                                ret = TRUE;
+                            }
+                            else if(g_strcmp0(iface,
+                                PCAT_MANAGER_MAIN_MOBILE_LTE_V6_IFACE)==0)
+                            {
+                                g_pcat_main_network_route_mode =
+                                    PCAT_MANAGER_ROUTE_MODE_MOBILE;
+                                ret = TRUE;
+                            }
+                        }
+
+                        if(ret)
+                        {
+                            break;
+                        }
+                    }
+                }
+            }
+
+            json_object_put(root);
+        }
+        G_STMT_END;
+
+        g_free(mwan3_stdout);
+
+        if(!ret)
+        {
+            g_pcat_main_network_route_mode =
+                PCAT_MANAGER_ROUTE_MODE_NONE;
+        }
+
+        for(i=0;i<50 && g_pcat_main_mwan_route_check_flag;i++)
+        {
+            g_usleep(100000);
+        }
+    }
+
+    return NULL;
+}
+
 int main(int argc, char *argv[])
 {
     GError *error = NULL;
     GOptionContext *context;
+    pthread_t mwan_policy_check_thread;
 
     context = g_option_context_new("- PCat System Manager");
     g_option_context_set_ignore_unknown_options(context, TRUE);
@@ -459,7 +667,20 @@ int main(int argc, char *argv[])
             "communicate with other processes.");
     }
 
+    if(pthread_create(&mwan_policy_check_thread, NULL,
+        pcat_main_mwan_policy_check_thread_func, NULL)!=0)
+    {
+        g_warning("Failed to create MWAN policy check thread, routing "
+            "check will not work!");
+    }
+    else
+    {
+        pthread_detach(mwan_policy_check_thread);
+    }
+
     g_main_loop_run(g_pcat_main_loop);
+
+    g_pcat_main_mwan_route_check_flag = FALSE;
 
     g_main_loop_unref(g_pcat_main_loop);
     g_pcat_main_loop = NULL;
@@ -492,4 +713,9 @@ void pcat_manager_main_request_shutdown()
 void pcat_manager_main_user_config_data_sync()
 {
     pcat_main_user_config_data_save();
+}
+
+PCatManagerRouteMode pcat_manager_main_network_route_mode_get()
+{
+    return g_pcat_main_network_route_mode;
 }
