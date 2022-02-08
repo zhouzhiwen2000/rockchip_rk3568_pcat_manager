@@ -469,6 +469,8 @@ static void pcat_controller_command_schedule_power_event_set_func(
         uconfig_data->power_schedule_data = NULL;
     }
 
+    uconfig_data->power_schedule_data = g_ptr_array_new();
+
     if(json_object_object_get_ex(root, "event-list", &array))
     {
         array_len = json_object_array_length(array);
