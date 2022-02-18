@@ -30,6 +30,10 @@ typedef enum
     PCAT_PMU_MANAGER_COMMAND_PMU_REQUEST_FACTORY_RESET_ACK = 0x12,
     PCAT_PMU_MANAGER_COMMAND_WATCHDOG_TIMEOUT_SET = 0x13,
     PCAT_PMU_MANAGER_COMMAND_WATCHDOG_TIMEOUT_SET_ACK = 0x14,
+    PCAT_PMU_MANAGER_COMMAND_POWER_ON_AUTO_START = 0x15,
+    PCAT_PMU_MANAGER_COMMAND_POWER_ON_AUTO_START_ACK = 0x16,
+    PCAT_PMU_MANAGER_COMMAND_NET_STATUS_LED_SETUP = 0x19,
+    PCAT_PMU_MANAGER_COMMAND_NET_STATUS_LED_SETUP_ACK = 0x1A
 }PCatPMUManagerCommandType;
 
 typedef struct _PCatPMUManagerCommandData
@@ -422,6 +426,37 @@ static void pcat_pmu_manager_schedule_time_update_internal(
 
         g_byte_array_unref(startup_setup_buffer);
     }
+}
+
+static void pcat_pmu_manager_power_on_auto_start_internal(
+    PCatPMUManagerData *pmu_data, guint state)
+{
+    guint8 v = (state!=0);
+
+    pcat_pmu_serial_write_data_request(pmu_data,
+        PCAT_PMU_MANAGER_COMMAND_POWER_ON_AUTO_START, FALSE, 0,
+        &v, 1, TRUE);
+}
+
+static void pcat_pmu_manager_net_status_led_setup_internal(
+    PCatPMUManagerData *pmu_data, guint on_time, guint down_time,
+    guint repeat)
+{
+    guint8 buffer[6];
+    guint16 v;
+
+    v = GUINT16_TO_LE(on_time);
+    memcpy(buffer, &v, 2);
+
+    v = GUINT16_TO_LE(down_time);
+    memcpy(buffer, &v, 2);
+
+    v = GUINT16_TO_LE(repeat);
+    memcpy(buffer, &v, 2);
+
+    pcat_pmu_serial_write_data_request(pmu_data,
+        PCAT_PMU_MANAGER_COMMAND_NET_STATUS_LED_SETUP, FALSE, 0,
+        buffer, 6, TRUE);
 }
 
 static void pcat_pmu_serial_status_data_parse(PCatPMUManagerData *pmu_data,
@@ -1208,3 +1243,27 @@ void pcat_pmu_manager_schedule_time_update()
 
     pcat_pmu_manager_schedule_time_update_internal(&g_pcat_pmu_manager_data);
 }
+
+void pcat_pmu_manager_power_on_auto_start(gboolean state)
+{
+    if(!g_pcat_pmu_manager_data.initialized)
+    {
+        return;
+    }
+
+    pcat_pmu_manager_power_on_auto_start_internal(&g_pcat_pmu_manager_data,
+        state);
+}
+
+void pcat_pmu_manager_net_status_led_setup(guint on_time, guint down_time,
+    guint repeat)
+{
+    if(!g_pcat_pmu_manager_data.initialized)
+    {
+        return;
+    }
+
+    pcat_pmu_manager_net_status_led_setup_internal(&g_pcat_pmu_manager_data,
+        on_time, down_time, repeat);
+}
+

@@ -34,6 +34,8 @@ static gboolean g_pcat_main_request_shutdown = FALSE;
 static guint g_pcat_main_shutdown_wait_count = 0;
 static gboolean g_pcat_main_watchdog_disabled = FALSE;
 
+static gboolean g_pcat_main_net_status_led_work_mode = TRUE;
+
 static PCatManagerRouteMode g_pcat_main_network_route_mode =
     PCAT_MANAGER_ROUTE_MODE_NONE;
 static gboolean g_pcat_main_mwan_route_check_flag = TRUE;
@@ -497,6 +499,13 @@ static void *pcat_main_mwan_policy_check_thread_func(void *user_data)
                             {
                                 g_pcat_main_network_route_mode =
                                     PCAT_MANAGER_ROUTE_MODE_WIRED;
+
+                                if(g_pcat_main_net_status_led_work_mode)
+                                {
+                                    pcat_pmu_manager_net_status_led_setup(
+                                        50, 50, 0);
+                                }
+
                                 ret = TRUE;
                             }
                             else if(g_strcmp0(iface,
@@ -504,6 +513,13 @@ static void *pcat_main_mwan_policy_check_thread_func(void *user_data)
                             {
                                 g_pcat_main_network_route_mode =
                                     PCAT_MANAGER_ROUTE_MODE_MOBILE;
+
+                                if(g_pcat_main_net_status_led_work_mode)
+                                {
+                                    pcat_pmu_manager_net_status_led_setup(
+                                        20, 80, 0);
+                                }
+
                                 ret = TRUE;
                             }
                             else if(g_strcmp0(iface,
@@ -511,6 +527,13 @@ static void *pcat_main_mwan_policy_check_thread_func(void *user_data)
                             {
                                 g_pcat_main_network_route_mode =
                                     PCAT_MANAGER_ROUTE_MODE_MOBILE;
+
+                                if(g_pcat_main_net_status_led_work_mode)
+                                {
+                                    pcat_pmu_manager_net_status_led_setup(
+                                        20, 80, 0);
+                                }
+
                                 ret = TRUE;
                             }
                         }
@@ -565,6 +588,13 @@ static void *pcat_main_mwan_policy_check_thread_func(void *user_data)
                             {
                                 g_pcat_main_network_route_mode =
                                     PCAT_MANAGER_ROUTE_MODE_WIRED;
+
+                                if(g_pcat_main_net_status_led_work_mode)
+                                {
+                                    pcat_pmu_manager_net_status_led_setup(
+                                        50, 50, 0);
+                                }
+
                                 ret = TRUE;
                             }
                             else if(g_strcmp0(iface,
@@ -572,6 +602,13 @@ static void *pcat_main_mwan_policy_check_thread_func(void *user_data)
                             {
                                 g_pcat_main_network_route_mode =
                                     PCAT_MANAGER_ROUTE_MODE_MOBILE;
+
+                                if(g_pcat_main_net_status_led_work_mode)
+                                {
+                                    pcat_pmu_manager_net_status_led_setup(
+                                        20, 80, 0);
+                                }
+
                                 ret = TRUE;
                             }
                             else if(g_strcmp0(iface,
@@ -579,6 +616,13 @@ static void *pcat_main_mwan_policy_check_thread_func(void *user_data)
                             {
                                 g_pcat_main_network_route_mode =
                                     PCAT_MANAGER_ROUTE_MODE_MOBILE;
+
+                                if(g_pcat_main_net_status_led_work_mode)
+                                {
+                                    pcat_pmu_manager_net_status_led_setup(
+                                        20, 80, 0);
+                                }
+
                                 ret = TRUE;
                             }
                         }
@@ -601,6 +645,12 @@ static void *pcat_main_mwan_policy_check_thread_func(void *user_data)
         {
             g_pcat_main_network_route_mode =
                 PCAT_MANAGER_ROUTE_MODE_NONE;
+
+            if(g_pcat_main_net_status_led_work_mode)
+            {
+                pcat_pmu_manager_net_status_led_setup(
+                    0, 100, 0);
+            }
         }
 
         for(i=0;i<50 && g_pcat_main_mwan_route_check_flag;i++)

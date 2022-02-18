@@ -15,6 +15,9 @@ void pcat_pmu_manager_watchdog_timeout_set(guint timeout);
 gboolean pcat_pmu_manager_pmu_status_get(guint *battery_voltage,
     guint *charger_voltage, gboolean *on_battery, guint *battery_percentage);
 void pcat_pmu_manager_schedule_time_update();
+void pcat_pmu_manager_power_on_auto_start(gboolean state);
+void pcat_pmu_manager_net_status_led_setup(guint on_time, guint down_time,
+    guint repeat);
 
 G_END_DECLS
 
