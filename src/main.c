@@ -666,7 +666,6 @@ static gboolean pcat_main_status_check_timeout_func(gpointer user_data)
             g_pcat_main_network_route_mode;
     }
 
-
     return TRUE;
 }
 

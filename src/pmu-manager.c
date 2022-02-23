@@ -449,10 +449,10 @@ static void pcat_pmu_manager_net_status_led_setup_internal(
     memcpy(buffer, &v, 2);
 
     v = GUINT16_TO_LE(down_time);
-    memcpy(buffer, &v, 2);
+    memcpy(buffer + 2, &v, 2);
 
     v = GUINT16_TO_LE(repeat);
-    memcpy(buffer, &v, 2);
+    memcpy(buffer + 4, &v, 2);
 
     pcat_pmu_serial_write_data_request(pmu_data,
         PCAT_PMU_MANAGER_COMMAND_NET_STATUS_LED_SETUP, FALSE, 0,
