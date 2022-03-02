@@ -30,7 +30,8 @@ typedef struct _PCatControllerData
 }PCatControllerData;
 
 typedef void (*PCatControllerCommandCallback)(PCatControllerData *ctrl_data,
-    PCatControllerConnectionData *connection_data, struct json_object *root);
+    PCatControllerConnectionData *connection_data, const gchar *command,
+    struct json_object *root);
 
 typedef struct _PCatControllerCommandData
 {
@@ -263,7 +264,8 @@ static void pcat_controller_unix_socket_input_parse(
                             ctrl_data->command_table, command);
                         if(callback!=NULL)
                         {
-                            callback(ctrl_data, connection_data, root);
+                            callback(ctrl_data, connection_data, command,
+                                root);
                         }
 
                         g_debug("Controller got command %s.", command);
@@ -414,7 +416,8 @@ static gboolean pcat_controller_unix_socket_connection_check_timeout_func(
 
 static void pcat_controller_command_pmu_status_func(
     PCatControllerData *ctrl_data,
-    PCatControllerConnectionData *connection_data, struct json_object *root)
+    PCatControllerConnectionData *connection_data,
+    const gchar *command, struct json_object *root)
 {
     struct json_object *rroot, *child;
     guint battery_voltage = 0, charger_voltage = 0, battery_percentage = 0;
@@ -425,7 +428,7 @@ static void pcat_controller_command_pmu_status_func(
     pcat_pmu_manager_pmu_status_get(&battery_voltage, &charger_voltage,
         &on_battery, &battery_percentage);
 
-    child = json_object_new_string("pmu-status");
+    child = json_object_new_string(command);
     json_object_object_add(rroot, "command", child);
 
     child = json_object_new_int(0);
@@ -450,7 +453,8 @@ static void pcat_controller_command_pmu_status_func(
 
 static void pcat_controller_command_schedule_power_event_set_func(
     PCatControllerData *ctrl_data,
-    PCatControllerConnectionData *connection_data, struct json_object *root)
+    PCatControllerConnectionData *connection_data,
+    const gchar *command, struct json_object *root)
 {
     struct json_object *rroot, *child, *array, *node;
     guint array_len;
@@ -556,7 +560,7 @@ static void pcat_controller_command_schedule_power_event_set_func(
 
     rroot = json_object_new_object();
 
-    child = json_object_new_string("schedule-power-event-set");
+    child = json_object_new_string(command);
     json_object_object_add(rroot, "command", child);
 
     child = json_object_new_int(0);
@@ -571,7 +575,8 @@ static void pcat_controller_command_schedule_power_event_set_func(
 
 static void pcat_controller_command_schedule_power_event_get_func(
     PCatControllerData *ctrl_data,
-    PCatControllerConnectionData *connection_data, struct json_object *root)
+    PCatControllerConnectionData *connection_data,
+    const gchar *command, struct json_object *root)
 {
     struct json_object *rroot, *child, *array, *node;
     guint i;
@@ -582,7 +587,7 @@ static void pcat_controller_command_schedule_power_event_get_func(
 
     rroot = json_object_new_object();
 
-    child = json_object_new_string("schedule-power-event-get");
+    child = json_object_new_string(command);
     json_object_object_add(rroot, "command", child);
 
     child = json_object_new_int(0);
@@ -637,7 +642,8 @@ static void pcat_controller_command_schedule_power_event_get_func(
 
 static void pcat_controller_command_modem_status_get_func(
     PCatControllerData *ctrl_data,
-    PCatControllerConnectionData *connection_data, struct json_object *root)
+    PCatControllerConnectionData *connection_data,
+    const gchar *command, struct json_object *root)
 {
     struct json_object *rroot, *child;
     PCatModemManagerMode mode = PCAT_MODEM_MANAGER_MODE_NONE;
@@ -649,7 +655,7 @@ static void pcat_controller_command_modem_status_get_func(
     const gchar *mode_str = "none", *sim_state_str = "absent";
 
     rroot = json_object_new_object();
-    child = json_object_new_string("modem-status-get");
+    child = json_object_new_string(command);
     json_object_object_add(rroot, "command", child);
 
     if(!pcat_modem_manager_status_get(&mode, &sim_state, &signal_strength,
@@ -754,7 +760,8 @@ static void pcat_controller_command_modem_status_get_func(
 
 static void pcat_controller_command_network_route_mode_get_func(
     PCatControllerData *ctrl_data,
-    PCatControllerConnectionData *connection_data, struct json_object *root)
+    PCatControllerConnectionData *connection_data,
+    const gchar *command, struct json_object *root)
 {
     struct json_object *rroot, *child;
     PCatManagerRouteMode mode;
@@ -782,7 +789,7 @@ static void pcat_controller_command_network_route_mode_get_func(
         }
     }
 
-    child = json_object_new_string("network-route-mode-get");
+    child = json_object_new_string(command);
     json_object_object_add(rroot, "command", child);
 
     child = json_object_new_int(0);
@@ -790,6 +797,63 @@ static void pcat_controller_command_network_route_mode_get_func(
 
     child = json_object_new_string(mode_str);
     json_object_object_add(rroot, "mode", child);
+
+    pcat_controller_unix_socket_output_json_push(ctrl_data, connection_data,
+        rroot);
+    json_object_put(rroot);
+}
+
+static void pcat_controller_command_charger_on_auto_start_set_func(
+    PCatControllerData *ctrl_data,
+    PCatControllerConnectionData *connection_data,
+    const gchar *command, struct json_object *root)
+{
+    struct json_object *rroot, *child;
+    PCatManagerMainUserConfigData *uconfig_data;
+
+    uconfig_data = pcat_manager_main_user_config_data_get();
+
+    if(json_object_object_get_ex(root, "state", &child))
+    {
+        uconfig_data->charger_on_auto_start = (json_object_get_int(child)!=0);
+    }
+
+    rroot = json_object_new_object();
+
+    child = json_object_new_string(command);
+    json_object_object_add(rroot, "command", child);
+
+    child = json_object_new_int(0);
+    json_object_object_add(rroot, "code", child);
+
+    pcat_controller_unix_socket_output_json_push(ctrl_data, connection_data,
+        rroot);
+    json_object_put(rroot);
+
+    pcat_pmu_manager_charger_on_auto_start(
+        uconfig_data->charger_on_auto_start);
+}
+
+static void pcat_controller_command_charger_on_auto_start_get_func(
+    PCatControllerData *ctrl_data,
+    PCatControllerConnectionData *connection_data,
+    const gchar *command, struct json_object *root)
+{
+    struct json_object *rroot, *child;
+    const PCatManagerMainUserConfigData *uconfig_data;
+
+    uconfig_data = pcat_manager_main_user_config_data_get();
+
+    rroot = json_object_new_object();
+
+    child = json_object_new_string(command);
+    json_object_object_add(rroot, "command", child);
+
+    child = json_object_new_int(0);
+    json_object_object_add(rroot, "code", child);
+
+    child = json_object_new_int(uconfig_data->charger_on_auto_start ? 1 : 0);
+    json_object_object_add(rroot, "state", child);
 
     pcat_controller_unix_socket_output_json_push(ctrl_data, connection_data,
         rroot);
@@ -817,6 +881,14 @@ static PCatControllerCommandData g_pcat_controller_command_list[] =
     {
         .command = "network-route-mode-get",
         .callback = pcat_controller_command_network_route_mode_get_func,
+    },
+    {
+        .command = "charger-on-auto-start-set",
+        .callback = pcat_controller_command_charger_on_auto_start_set_func,
+    },
+    {
+        .command = "charger-on-auto-start-get",
+        .callback = pcat_controller_command_charger_on_auto_start_get_func,
     },
     { NULL, NULL }
 };

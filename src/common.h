@@ -61,6 +61,7 @@ typedef struct _PCatManagerMainUserConfigData
     gboolean dirty;
 
     GPtrArray *power_schedule_data;
+    gboolean charger_on_auto_start;
 }PCatManagerMainUserConfigData;
 
 PCatManagerMainConfigData *pcat_manager_main_config_data_get();

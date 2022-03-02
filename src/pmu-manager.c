@@ -30,8 +30,8 @@ typedef enum
     PCAT_PMU_MANAGER_COMMAND_PMU_REQUEST_FACTORY_RESET_ACK = 0x12,
     PCAT_PMU_MANAGER_COMMAND_WATCHDOG_TIMEOUT_SET = 0x13,
     PCAT_PMU_MANAGER_COMMAND_WATCHDOG_TIMEOUT_SET_ACK = 0x14,
-    PCAT_PMU_MANAGER_COMMAND_POWER_ON_AUTO_START = 0x15,
-    PCAT_PMU_MANAGER_COMMAND_POWER_ON_AUTO_START_ACK = 0x16,
+    PCAT_PMU_MANAGER_COMMAND_CHARGER_ON_AUTO_START = 0x15,
+    PCAT_PMU_MANAGER_COMMAND_CHARGER_ON_AUTO_START_ACK = 0x16,
     PCAT_PMU_MANAGER_COMMAND_NET_STATUS_LED_SETUP = 0x19,
     PCAT_PMU_MANAGER_COMMAND_NET_STATUS_LED_SETUP_ACK = 0x1A
 }PCatPMUManagerCommandType;
@@ -428,13 +428,13 @@ static void pcat_pmu_manager_schedule_time_update_internal(
     }
 }
 
-static void pcat_pmu_manager_power_on_auto_start_internal(
+static void pcat_pmu_manager_charger_on_auto_start_internal(
     PCatPMUManagerData *pmu_data, guint state)
 {
     guint8 v = (state!=0);
 
     pcat_pmu_serial_write_data_request(pmu_data,
-        PCAT_PMU_MANAGER_COMMAND_POWER_ON_AUTO_START, FALSE, 0,
+        PCAT_PMU_MANAGER_COMMAND_CHARGER_ON_AUTO_START, FALSE, 0,
         &v, 1, TRUE);
 }
 
@@ -1115,6 +1115,8 @@ static gboolean pcat_pmu_manager_check_timeout_func(gpointer user_data)
 
 gboolean pcat_pmu_manager_init()
 {
+    const PCatManagerMainUserConfigData *uconfig_data;
+
     if(g_pcat_pmu_manager_data.initialized)
     {
         return TRUE;
@@ -1140,6 +1142,11 @@ gboolean pcat_pmu_manager_init()
     pcat_pmu_manager_watchdog_timeout_set(5);
     pcat_pmu_manager_schedule_time_update_internal(&g_pcat_pmu_manager_data);
     pcat_pmu_manager_date_time_sync(&g_pcat_pmu_manager_data);
+
+    uconfig_data = pcat_manager_main_user_config_data_get();
+
+    pcat_pmu_manager_charger_on_auto_start_internal(&g_pcat_pmu_manager_data,
+        uconfig_data->charger_on_auto_start);
 
     return TRUE;
 }
@@ -1244,14 +1251,14 @@ void pcat_pmu_manager_schedule_time_update()
     pcat_pmu_manager_schedule_time_update_internal(&g_pcat_pmu_manager_data);
 }
 
-void pcat_pmu_manager_power_on_auto_start(gboolean state)
+void pcat_pmu_manager_charger_on_auto_start(gboolean state)
 {
     if(!g_pcat_pmu_manager_data.initialized)
     {
         return;
     }
 
-    pcat_pmu_manager_power_on_auto_start_internal(&g_pcat_pmu_manager_data,
+    pcat_pmu_manager_charger_on_auto_start_internal(&g_pcat_pmu_manager_data,
         state);
 }
 

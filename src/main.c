@@ -233,6 +233,9 @@ static gboolean pcat_main_user_config_data_load()
         g_ptr_array_add(uconfig_data->power_schedule_data, sdata);
     }
 
+    uconfig_data->charger_on_auto_start = (g_key_file_get_integer(keyfile,
+        "General", "ChargerOnAutoStart", NULL)!=0);
+
     g_key_file_unref(keyfile);
 
     uconfig_data->valid = TRUE;
@@ -287,6 +290,9 @@ static gboolean pcat_main_user_config_data_save()
                 sdata->action ? 1 : 0);
         }
     }
+
+    g_key_file_set_integer(keyfile, "General", "ChargerOnAutoStart",
+        uconfig_data->charger_on_auto_start ? 1 : 0);
 
     ret = g_key_file_save_to_file(keyfile, PCAT_MANAGER_MAIN_USER_CONFIG_FILE,
         &error);
@@ -645,7 +651,7 @@ static gboolean pcat_main_status_check_timeout_func(gpointer user_data)
                 if(g_pcat_main_net_status_led_work_mode)
                 {
                     pcat_pmu_manager_net_status_led_setup(
-                        20, 80, 0);
+                        20, 380, 0);
                 }
 
                 break;
