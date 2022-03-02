@@ -509,15 +509,15 @@ static void pcat_pmu_serial_status_data_parse(PCatPMUManagerData *pmu_data,
 
     on_battery = (charger_voltage < 4200);
 
-    if(on_battery)
+    if(!on_battery)
     {
         if(battery_voltage >= 4200)
         {
             battery_percentage = 100.0f;
         }
-        else if(battery_voltage >= 4050)
+        else if(battery_voltage >= 3700)
         {
-            battery_percentage = ((gdouble)battery_voltage - 4050) * 100 / 150;
+            battery_percentage = ((gdouble)battery_voltage - 3700) * 100 / 500;
         }
         else
         {
