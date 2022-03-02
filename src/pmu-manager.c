@@ -997,6 +997,7 @@ static gboolean pcat_pmu_manager_check_timeout_func(gpointer user_data)
 
         uconfig_data = pcat_manager_main_user_config_data_get();
         if(uconfig_data->power_schedule_data!=NULL &&
+            !uconfig_data->charger_on_auto_start &&
             !pmu_data->shutdown_planned)
         {
             dt = g_date_time_new_now_utc();
