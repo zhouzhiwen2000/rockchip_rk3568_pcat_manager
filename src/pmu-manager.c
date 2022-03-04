@@ -16,6 +16,9 @@
 typedef enum
 {
     PCAT_PMU_MANAGER_COMMAND_HEARTBEAT = 0x1,
+    PCAT_PMU_MANAGER_COMMAND_HEARTBEAT_ACK = 0x2,
+    PCAT_PMU_MANAGER_COMMAND_PMU_FW_VERSION_GET = 0x3,
+    PCAT_PMU_MANAGER_COMMAND_PMU_FW_VERSION_GET_ACK = 0x4,
     PCAT_PMU_MANAGER_COMMAND_STATUS_REPORT = 0x7,
     PCAT_PMU_MANAGER_COMMAND_STATUS_REPORT_ACK = 0x8,
     PCAT_PMU_MANAGER_COMMAND_DATE_TIME_SYNC = 0x9,
@@ -74,6 +77,8 @@ typedef struct _PCatPMUManagerData
     guint last_charger_voltage;
     gboolean last_on_battery_state;
     guint last_battery_percentage;
+
+    gchar *pmu_fw_version;
 }PCatPMUManagerData;
 
 static PCatPMUManagerData g_pcat_pmu_manager_data = {0};
@@ -438,6 +443,14 @@ static void pcat_pmu_manager_charger_on_auto_start_internal(
         &v, 1, TRUE);
 }
 
+static void pcat_pmu_manager_pmu_fw_version_get_internal(
+    PCatPMUManagerData *pmu_data)
+{
+    pcat_pmu_serial_write_data_request(pmu_data,
+        PCAT_PMU_MANAGER_COMMAND_PMU_FW_VERSION_GET, FALSE, 0,
+        NULL, 0, TRUE);
+}
+
 static void pcat_pmu_manager_net_status_led_setup_internal(
     PCatPMUManagerData *pmu_data, guint on_time, guint down_time,
     guint repeat)
@@ -773,6 +786,23 @@ static void pcat_pmu_serial_read_data_parse(PCatPMUManagerData *pmu_data)
                             pcat_pmu_serial_write_data_request(pmu_data,
                                 command+1, TRUE, frame_num, &state, 1, FALSE);
                         }
+
+                        break;
+                    }
+                    case PCAT_PMU_MANAGER_COMMAND_PMU_FW_VERSION_GET_ACK:
+                    {
+                        if(extra_data_len < 8)
+                        {
+                            break;
+                        }
+
+                        if(pmu_data->pmu_fw_version!=NULL)
+                        {
+                            g_free(pmu_data->pmu_fw_version);
+                        }
+                        pmu_data->pmu_fw_version =
+                            g_strndup((const gchar *)extra_data,
+                            extra_data_len);
 
                         break;
                     }
@@ -1149,6 +1179,8 @@ gboolean pcat_pmu_manager_init()
     pcat_pmu_manager_charger_on_auto_start_internal(&g_pcat_pmu_manager_data,
         uconfig_data->charger_on_auto_start);
 
+    pcat_pmu_manager_pmu_fw_version_get_internal(&g_pcat_pmu_manager_data);
+
     return TRUE;
 }
 
@@ -1166,6 +1198,12 @@ void pcat_pmu_manager_uninit()
     }
 
     pcat_pmu_serial_close(&g_pcat_pmu_manager_data);
+
+    if(g_pcat_pmu_manager_data.pmu_fw_version!=NULL)
+    {
+        g_free(g_pcat_pmu_manager_data.pmu_fw_version);
+        g_pcat_pmu_manager_data.pmu_fw_version = NULL;
+    }
 
     g_pcat_pmu_manager_data.initialized = FALSE;
 }
@@ -1275,3 +1313,7 @@ void pcat_pmu_manager_net_status_led_setup(guint on_time, guint down_time,
         on_time, down_time, repeat);
 }
 
+const gchar *pcat_pmu_manager_pmu_fw_version_get()
+{
+    return g_pcat_pmu_manager_data.pmu_fw_version;
+}
