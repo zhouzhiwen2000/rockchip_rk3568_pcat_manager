@@ -19,6 +19,7 @@ void pcat_pmu_manager_charger_on_auto_start(gboolean state);
 void pcat_pmu_manager_net_status_led_setup(guint on_time, guint down_time,
     guint repeat);
 const gchar *pcat_pmu_manager_pmu_fw_version_get();
+gint64 pcat_pmu_manager_charger_on_auto_start_last_timestamp_get();
 
 G_END_DECLS
 

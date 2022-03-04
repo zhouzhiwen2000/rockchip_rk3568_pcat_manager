@@ -474,6 +474,7 @@ static void pcat_controller_command_schedule_power_event_set_func(
     }
 
     uconfig_data->power_schedule_data = g_ptr_array_new();
+    uconfig_data->dirty = TRUE;
 
     if(json_object_object_get_ex(root, "event-list", &array))
     {
@@ -581,7 +582,7 @@ static void pcat_controller_command_schedule_power_event_get_func(
     struct json_object *rroot, *child, *array, *node;
     guint i;
     PCatManagerPowerScheduleData *sdata;
-    PCatManagerMainUserConfigData *uconfig_data;
+    const PCatManagerMainUserConfigData *uconfig_data;
 
     uconfig_data = pcat_manager_main_user_config_data_get();
 
@@ -816,6 +817,14 @@ static void pcat_controller_command_charger_on_auto_start_set_func(
     if(json_object_object_get_ex(root, "state", &child))
     {
         uconfig_data->charger_on_auto_start = (json_object_get_int(child)!=0);
+        uconfig_data->dirty = TRUE;
+    }
+
+    if(json_object_object_get_ex(root, "timeout", &child))
+    {
+        uconfig_data->charger_on_auto_start_timeout =
+            json_object_get_int(child);
+        uconfig_data->dirty = TRUE;
     }
 
     rroot = json_object_new_object();
@@ -841,6 +850,7 @@ static void pcat_controller_command_charger_on_auto_start_get_func(
 {
     struct json_object *rroot, *child;
     const PCatManagerMainUserConfigData *uconfig_data;
+    gint64 countdown;
 
     uconfig_data = pcat_manager_main_user_config_data_get();
 
@@ -854,6 +864,17 @@ static void pcat_controller_command_charger_on_auto_start_get_func(
 
     child = json_object_new_int(uconfig_data->charger_on_auto_start ? 1 : 0);
     json_object_object_add(rroot, "state", child);
+
+    child = json_object_new_int(uconfig_data->charger_on_auto_start_timeout);
+    json_object_object_add(rroot, "timeout", child);
+
+    countdown = (g_get_monotonic_time() -
+        pcat_pmu_manager_charger_on_auto_start_last_timestamp_get()) /
+        1000000L;
+    countdown = uconfig_data->charger_on_auto_start_timeout - countdown;
+
+    child = json_object_new_int(countdown);
+    json_object_object_add(rroot, "countdown", child);
 
     pcat_controller_unix_socket_output_json_push(ctrl_data, connection_data,
         rroot);

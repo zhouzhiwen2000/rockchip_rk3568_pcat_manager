@@ -79,6 +79,7 @@ typedef struct _PCatPMUManagerData
     guint last_battery_percentage;
 
     gchar *pmu_fw_version;
+    gint64 charger_on_auto_start_last_timestamp;
 }PCatPMUManagerData;
 
 static PCatPMUManagerData g_pcat_pmu_manager_data = {0};
@@ -1019,6 +1020,10 @@ static gboolean pcat_pmu_manager_check_timeout_func(gpointer user_data)
     }
 
     now = g_get_monotonic_time();
+    if(pmu_data->last_charger_voltage >= 4200)
+    {
+        pmu_data->charger_on_auto_start_last_timestamp = now;
+    }
 
     if(!pmu_data->reboot_request && !pmu_data->shutdown_request)
     {
@@ -1026,8 +1031,16 @@ static gboolean pcat_pmu_manager_check_timeout_func(gpointer user_data)
             PCAT_PMU_MANAGER_COMMAND_HEARTBEAT, FALSE, 0, NULL, 0, FALSE);
 
         uconfig_data = pcat_manager_main_user_config_data_get();
-        if(uconfig_data->power_schedule_data!=NULL &&
-            !uconfig_data->charger_on_auto_start &&
+        if(uconfig_data->charger_on_auto_start)
+        {
+            if(now > pmu_data->charger_on_auto_start_last_timestamp +
+               (gint64)uconfig_data->charger_on_auto_start_timeout * 1000000L)
+            {
+                pcat_manager_main_request_shutdown();
+                pmu_data->shutdown_planned = TRUE;
+            }
+        }
+        else if(uconfig_data->power_schedule_data!=NULL &&
             !pmu_data->shutdown_planned)
         {
             dt = g_date_time_new_now_utc();
@@ -1157,6 +1170,8 @@ gboolean pcat_pmu_manager_init()
     g_pcat_pmu_manager_data.reboot_request = FALSE;
     g_pcat_pmu_manager_data.shutdown_process_completed = FALSE;
     g_pcat_pmu_manager_data.reboot_process_completed = FALSE;
+    g_pcat_pmu_manager_data.charger_on_auto_start_last_timestamp =
+        g_get_monotonic_time();
 
     g_mkdir_with_parents(PCAT_PMU_MANAGER_STATEFS_BATTERY_PATH, 0755);
 
@@ -1316,4 +1331,9 @@ void pcat_pmu_manager_net_status_led_setup(guint on_time, guint down_time,
 const gchar *pcat_pmu_manager_pmu_fw_version_get()
 {
     return g_pcat_pmu_manager_data.pmu_fw_version;
+}
+
+gint64 pcat_pmu_manager_charger_on_auto_start_last_timestamp_get()
+{
+    return g_pcat_pmu_manager_data.charger_on_auto_start_last_timestamp;
 }

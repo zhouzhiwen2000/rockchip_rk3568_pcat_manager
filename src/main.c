@@ -235,6 +235,9 @@ static gboolean pcat_main_user_config_data_load()
 
     uconfig_data->charger_on_auto_start = (g_key_file_get_integer(keyfile,
         "General", "ChargerOnAutoStart", NULL)!=0);
+    uconfig_data->charger_on_auto_start_timeout =
+        g_key_file_get_integer(keyfile, "General",
+        "ChargerOnAutoStartTimeout", NULL);
 
     g_key_file_unref(keyfile);
 
@@ -293,6 +296,8 @@ static gboolean pcat_main_user_config_data_save()
 
     g_key_file_set_integer(keyfile, "General", "ChargerOnAutoStart",
         uconfig_data->charger_on_auto_start ? 1 : 0);
+    g_key_file_set_integer(keyfile, "General", "ChargerOnAutoStartTimeout",
+        uconfig_data->charger_on_auto_start_timeout);
 
     ret = g_key_file_save_to_file(keyfile, PCAT_MANAGER_MAIN_USER_CONFIG_FILE,
         &error);
