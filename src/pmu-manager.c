@@ -526,7 +526,7 @@ static void pcat_pmu_serial_status_data_parse(PCatPMUManagerData *pmu_data,
     }
     else
     {
-        pmu_dt = g_date_time_new_local(y, m, d, h, min, (gdouble)s);
+        pmu_dt = g_date_time_new_utc(y, m, d, h, min, (gdouble)s);
         pmu_unix_time = g_date_time_to_unix(pmu_dt);
         g_date_time_unref(pmu_dt);
 
