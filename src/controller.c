@@ -841,6 +841,7 @@ static void pcat_controller_command_charger_on_auto_start_set_func(
 
     pcat_pmu_manager_charger_on_auto_start(
         uconfig_data->charger_on_auto_start);
+    pcat_manager_main_user_config_data_sync();
 }
 
 static void pcat_controller_command_charger_on_auto_start_get_func(
