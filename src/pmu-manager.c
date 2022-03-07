@@ -4,6 +4,7 @@
 #include <termios.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/time.h>
 #include <fcntl.h>
 
 #include "pmu-manager.h"
@@ -17,8 +18,10 @@ typedef enum
 {
     PCAT_PMU_MANAGER_COMMAND_HEARTBEAT = 0x1,
     PCAT_PMU_MANAGER_COMMAND_HEARTBEAT_ACK = 0x2,
-    PCAT_PMU_MANAGER_COMMAND_PMU_FW_VERSION_GET = 0x3,
-    PCAT_PMU_MANAGER_COMMAND_PMU_FW_VERSION_GET_ACK = 0x4,
+    PCAT_PMU_MANAGER_COMMAND_PMU_HW_VERSION_GET = 0x3,
+    PCAT_PMU_MANAGER_COMMAND_PMU_HW_VERSION_GET_ACK = 0x4,
+    PCAT_PMU_MANAGER_COMMAND_PMU_FW_VERSION_GET = 0x5,
+    PCAT_PMU_MANAGER_COMMAND_PMU_FW_VERSION_GET_ACK = 0x6,
     PCAT_PMU_MANAGER_COMMAND_STATUS_REPORT = 0x7,
     PCAT_PMU_MANAGER_COMMAND_STATUS_REPORT_ACK = 0x8,
     PCAT_PMU_MANAGER_COMMAND_DATE_TIME_SYNC = 0x9,
@@ -80,6 +83,7 @@ typedef struct _PCatPMUManagerData
 
     gchar *pmu_fw_version;
     gint64 charger_on_auto_start_last_timestamp;
+    gboolean system_time_set_flag;
 }PCatPMUManagerData;
 
 static PCatPMUManagerData g_pcat_pmu_manager_data = {0};
@@ -484,6 +488,7 @@ static void pcat_pmu_serial_status_data_parse(PCatPMUManagerData *pmu_data,
     FILE *fp;
     gdouble battery_percentage;
     gboolean on_battery;
+    struct timeval tv;
 
     if(len < 16)
     {
@@ -501,20 +506,34 @@ static void pcat_pmu_serial_status_data_parse(PCatPMUManagerData *pmu_data,
     min = data[13];
     s = data[14];
 
-    pmu_dt = g_date_time_new_utc(y, m, d, h, min, (gdouble)s);
-    pmu_unix_time = g_date_time_to_unix(pmu_dt);
-    g_date_time_unref(pmu_dt);
-
-    host_dt = g_date_time_new_now_utc();
-    host_unix_time = g_date_time_to_unix(host_dt);
-    g_date_time_unref(host_dt);
-
-    if(pmu_unix_time - host_unix_time > 60 ||
-        host_unix_time - pmu_unix_time > 60)
+    if(pmu_data->system_time_set_flag)
     {
-        g_message("PMU time out of sync, send time sync command.");
+        pmu_dt = g_date_time_new_utc(y, m, d, h, min, (gdouble)s);
+        pmu_unix_time = g_date_time_to_unix(pmu_dt);
+        g_date_time_unref(pmu_dt);
 
-        pcat_pmu_manager_date_time_sync(pmu_data);
+        host_dt = g_date_time_new_now_utc();
+        host_unix_time = g_date_time_to_unix(host_dt);
+        g_date_time_unref(host_dt);
+
+        if(pmu_unix_time - host_unix_time > 60 ||
+            host_unix_time - pmu_unix_time > 60)
+        {
+            g_message("PMU time out of sync, send time sync command.");
+
+            pcat_pmu_manager_date_time_sync(pmu_data);
+        }
+    }
+    else
+    {
+        pmu_dt = g_date_time_new_local(y, m, d, h, min, (gdouble)s);
+        pmu_unix_time = g_date_time_to_unix(pmu_dt);
+        g_date_time_unref(pmu_dt);
+
+        tv.tv_sec = pmu_unix_time;
+        settimeofday(&tv, NULL);
+
+        pmu_data->system_time_set_flag = TRUE;
     }
 
     g_debug("PMU report battery voltage %u mV, charger voltage %u mV, "
@@ -792,7 +811,7 @@ static void pcat_pmu_serial_read_data_parse(PCatPMUManagerData *pmu_data)
                     }
                     case PCAT_PMU_MANAGER_COMMAND_PMU_FW_VERSION_GET_ACK:
                     {
-                        if(extra_data_len < 8)
+                        if(extra_data_len < 14)
                         {
                             break;
                         }
@@ -1104,6 +1123,7 @@ static gboolean pcat_pmu_manager_check_timeout_func(gpointer user_data)
                        g_date_time_get_minute(dt)==sdata->minute)
                     {
                         need_action = TRUE;
+
                     }
                 }
                 else if(sdata->enable_bits &
@@ -1172,6 +1192,7 @@ gboolean pcat_pmu_manager_init()
     g_pcat_pmu_manager_data.reboot_process_completed = FALSE;
     g_pcat_pmu_manager_data.charger_on_auto_start_last_timestamp =
         g_get_monotonic_time();
+    g_pcat_pmu_manager_data.system_time_set_flag = FALSE;
 
     g_mkdir_with_parents(PCAT_PMU_MANAGER_STATEFS_BATTERY_PATH, 0755);
 
