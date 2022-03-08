@@ -31,6 +31,7 @@ static GMainLoop *g_pcat_main_loop = NULL;
 static gboolean g_pcat_main_shutdown = FALSE;
 static gboolean g_pcat_main_reboot = FALSE;
 static gboolean g_pcat_main_request_shutdown = FALSE;
+static gboolean g_pcat_main_request_shutdown_send_pmu_request = TRUE;
 static guint g_pcat_main_shutdown_wait_count = 0;
 static gboolean g_pcat_main_watchdog_disabled = FALSE;
 
@@ -382,9 +383,16 @@ static void pcat_manager_main_system_shutdown()
         return;
     }
 
-    pcat_pmu_manager_shutdown_request();
-    g_timeout_add_seconds(1,
-        pcat_manager_main_shutdown_check_timeout_func, NULL);
+    if(g_pcat_main_request_shutdown_send_pmu_request)
+    {
+        pcat_pmu_manager_shutdown_request();
+        g_timeout_add_seconds(1,
+            pcat_manager_main_shutdown_check_timeout_func, NULL);
+    }
+    else
+    {
+        g_main_loop_quit(g_pcat_main_loop);
+    }
 
     g_pcat_main_shutdown = TRUE;
 }
@@ -781,9 +789,10 @@ PCatManagerMainUserConfigData *pcat_manager_main_user_config_data_get()
     return &g_pcat_manager_main_user_config_data;
 }
 
-void pcat_manager_main_request_shutdown()
+void pcat_manager_main_request_shutdown(gboolean send_pmu_request)
 {
     g_pcat_main_request_shutdown = TRUE;
+    g_pcat_main_request_shutdown_send_pmu_request = send_pmu_request;
     g_spawn_command_line_async("poweroff", NULL);
 }
 

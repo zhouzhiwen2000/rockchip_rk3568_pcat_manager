@@ -767,7 +767,7 @@ static void pcat_pmu_serial_read_data_parse(PCatPMUManagerData *pmu_data)
                     }
                     case PCAT_PMU_MANAGER_COMMAND_PMU_REQUEST_SHUTDOWN:
                     {
-                        pcat_manager_main_request_shutdown();
+                        pcat_manager_main_request_shutdown(FALSE);
 
                         if(need_ack)
                         {
@@ -1055,7 +1055,7 @@ static gboolean pcat_pmu_manager_check_timeout_func(gpointer user_data)
             if(now > pmu_data->charger_on_auto_start_last_timestamp +
                (gint64)uconfig_data->charger_on_auto_start_timeout * 1000000L)
             {
-                pcat_manager_main_request_shutdown();
+                pcat_manager_main_request_shutdown(TRUE);
                 pmu_data->shutdown_planned = TRUE;
             }
         }
@@ -1145,7 +1145,7 @@ static gboolean pcat_pmu_manager_check_timeout_func(gpointer user_data)
 
                 if(need_action)
                 {
-                    pcat_manager_main_request_shutdown();
+                    pcat_manager_main_request_shutdown(TRUE);
                     pmu_data->shutdown_planned = TRUE;
                 }
             }

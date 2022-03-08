@@ -68,7 +68,7 @@ typedef struct _PCatManagerMainUserConfigData
 PCatManagerMainConfigData *pcat_manager_main_config_data_get();
 PCatManagerMainUserConfigData *pcat_manager_main_user_config_data_get();
 void pcat_manager_main_user_config_data_sync();
-void pcat_manager_main_request_shutdown();
+void pcat_manager_main_request_shutdown(gboolean send_pmu_request);
 PCatManagerRouteMode pcat_manager_main_network_route_mode_get();
 
 G_END_DECLS
