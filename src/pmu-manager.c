@@ -439,9 +439,9 @@ static void pcat_pmu_manager_schedule_time_update_internal(
 }
 
 static void pcat_pmu_manager_charger_on_auto_start_internal(
-    PCatPMUManagerData *pmu_data, guint state)
+    PCatPMUManagerData *pmu_data, gboolean state)
 {
-    guint8 v = (state!=0);
+    guint8 v = state ? 1 : 0;
 
     pcat_pmu_serial_write_data_request(pmu_data,
         PCAT_PMU_MANAGER_COMMAND_CHARGER_ON_AUTO_START, FALSE, 0,
@@ -509,8 +509,15 @@ static void pcat_pmu_serial_status_data_parse(PCatPMUManagerData *pmu_data,
     if(pmu_data->system_time_set_flag)
     {
         pmu_dt = g_date_time_new_utc(y, m, d, h, min, (gdouble)s);
-        pmu_unix_time = g_date_time_to_unix(pmu_dt);
-        g_date_time_unref(pmu_dt);
+        if(pmu_dt!=NULL)
+        {
+            pmu_unix_time = g_date_time_to_unix(pmu_dt);
+            g_date_time_unref(pmu_dt);
+        }
+        else
+        {
+            pmu_unix_time = 0;
+        }
 
         host_dt = g_date_time_new_now_utc();
         host_unix_time = g_date_time_to_unix(host_dt);
@@ -527,11 +534,14 @@ static void pcat_pmu_serial_status_data_parse(PCatPMUManagerData *pmu_data,
     else
     {
         pmu_dt = g_date_time_new_utc(y, m, d, h, min, (gdouble)s);
-        pmu_unix_time = g_date_time_to_unix(pmu_dt);
-        g_date_time_unref(pmu_dt);
+        if(pmu_dt!=NULL)
+        {
+            pmu_unix_time = g_date_time_to_unix(pmu_dt);
+            g_date_time_unref(pmu_dt);
 
-        tv.tv_sec = pmu_unix_time;
-        settimeofday(&tv, NULL);
+            tv.tv_sec = pmu_unix_time;
+            settimeofday(&tv, NULL);
+        }
 
         pmu_data->system_time_set_flag = TRUE;
     }

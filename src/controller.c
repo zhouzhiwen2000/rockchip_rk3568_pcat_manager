@@ -558,16 +558,30 @@ static void pcat_controller_command_schedule_power_event_set_func(
                 }
 
                 dt1 = g_date_time_new_local(y, m, d, h, min, 0);
-                dt2 = g_date_time_to_utc(dt1);
-                g_date_time_unref(dt1);
+                dt2 = NULL;
+                if(dt1!=NULL)
+                {
+                    dt2 = g_date_time_to_utc(dt1);
+                    g_date_time_unref(dt1);
+                }
+                if(dt2!=NULL)
+                {
+                    sdata->year = g_date_time_get_year(dt2);
+                    sdata->month = g_date_time_get_month(dt2);
+                    sdata->day = g_date_time_get_day_of_month(dt2);
+                    sdata->hour = g_date_time_get_hour(dt2);
+                    sdata->minute = g_date_time_get_minute(dt2);
 
-                sdata->year = g_date_time_get_year(dt2);
-                sdata->month = g_date_time_get_month(dt2);
-                sdata->day = g_date_time_get_day_of_month(dt2);
-                sdata->hour = g_date_time_get_hour(dt2);
-                sdata->minute = g_date_time_get_minute(dt2);
-
-                g_date_time_unref(dt2);
+                    g_date_time_unref(dt2);
+                }
+                else
+                {
+                    sdata->year = 2000;
+                    sdata->month = 1;
+                    sdata->day = 1;
+                    sdata->hour = 0;
+                    sdata->minute = 0;
+                }
 
                 if(json_object_object_get_ex(node, "dow-bits", &child))
                 {
@@ -636,25 +650,49 @@ static void pcat_controller_command_schedule_power_event_get_func(
 
             dt1 = g_date_time_new_utc(sdata->year, sdata->month,
                 sdata->day, sdata->hour, sdata->minute, 0);
-            dt2 = g_date_time_to_local(dt1);
-            g_date_time_unref(dt1);
+            dt2 = NULL;
+            if(dt1!=NULL)
+            {
+                dt2 = g_date_time_to_local(dt1);
+                g_date_time_unref(dt1);
+            }
 
-            child = json_object_new_int(g_date_time_get_year(dt2));
-            json_object_object_add(node, "year", child);
+            if(dt2!=NULL)
+            {
+                child = json_object_new_int(g_date_time_get_year(dt2));
+                json_object_object_add(node, "year", child);
 
-            child = json_object_new_int(g_date_time_get_month(dt2));
-            json_object_object_add(node, "month", child);
+                child = json_object_new_int(g_date_time_get_month(dt2));
+                json_object_object_add(node, "month", child);
 
-            child = json_object_new_int(g_date_time_get_day_of_month(dt2));
-            json_object_object_add(node, "day", child);
+                child = json_object_new_int(g_date_time_get_day_of_month(dt2));
+                json_object_object_add(node, "day", child);
 
-            child = json_object_new_int(g_date_time_get_hour(dt2));
-            json_object_object_add(node, "hour", child);
+                child = json_object_new_int(g_date_time_get_hour(dt2));
+                json_object_object_add(node, "hour", child);
 
-            child = json_object_new_int(g_date_time_get_minute(dt2));
-            json_object_object_add(node, "minute", child);
+                child = json_object_new_int(g_date_time_get_minute(dt2));
+                json_object_object_add(node, "minute", child);
 
-            g_date_time_unref(dt2);
+                g_date_time_unref(dt2);
+            }
+            else
+            {
+                child = json_object_new_int(2000);
+                json_object_object_add(node, "year", child);
+
+                child = json_object_new_int(1);
+                json_object_object_add(node, "month", child);
+
+                child = json_object_new_int(1);
+                json_object_object_add(node, "day", child);
+
+                child = json_object_new_int(0);
+                json_object_object_add(node, "hour", child);
+
+                child = json_object_new_int(0);
+                json_object_object_add(node, "minute", child);
+            }
 
             child = json_object_new_int(sdata->dow_bits);
             json_object_object_add(node, "dow-bits", child);

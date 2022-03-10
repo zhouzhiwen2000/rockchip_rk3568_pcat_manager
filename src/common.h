@@ -40,6 +40,7 @@ typedef struct _PCatManagerMainConfigData
     guint pm_serial_baud;
 
     gboolean debug_modem_external_exec_stdout_log;
+    gboolean debug_output_log;
 }PCatManagerMainConfigData;
 
 typedef struct _PCatManagerPowerScheduleData

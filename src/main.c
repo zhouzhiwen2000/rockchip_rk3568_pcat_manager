@@ -16,6 +16,8 @@
 #define PCAT_MANAGER_MAIN_USER_CONFIG_FILE "/etc/pcat-manager-userdata.conf"
 #define PCAT_MANAGER_MAIN_SHUTDOWN_REQUEST_FILE "/tmp/pcat-shutdown.tmp"
 
+#define PCAT_MANAGER_MAIN_LOG_FILE "/tmp/pcat-manager.log"
+
 #define PCAT_MANAGER_MAIN_WIRED_IFACE "wan"
 #define PCAT_MANAGER_MAIN_WIRED_V6_IFACE "wan6"
 #define PCAT_MANAGER_MAIN_MOBILE_5G_IFACE "wwan_5g"
@@ -148,6 +150,10 @@ static gboolean pcat_main_config_data_load()
         "ModemExternalExecStdoutLog", NULL);
     g_pcat_manager_main_config_data.debug_modem_external_exec_stdout_log =
         ivalue;
+
+    ivalue = g_key_file_get_integer(keyfile, "Debug",
+        "OutputLog", NULL);
+    g_pcat_manager_main_config_data.debug_output_log = ivalue;
 
     g_key_file_unref(keyfile);
 
@@ -708,6 +714,11 @@ int main(int argc, char *argv[])
         g_warning("Failed to load main config data!");
 
         return 1;
+    }
+
+    if(g_pcat_manager_main_config_data.debug_output_log)
+    {
+
     }
 
     if(!pcat_main_user_config_data_load())
