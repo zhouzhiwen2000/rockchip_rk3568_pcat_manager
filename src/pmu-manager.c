@@ -39,7 +39,9 @@ typedef enum
     PCAT_PMU_MANAGER_COMMAND_CHARGER_ON_AUTO_START = 0x15,
     PCAT_PMU_MANAGER_COMMAND_CHARGER_ON_AUTO_START_ACK = 0x16,
     PCAT_PMU_MANAGER_COMMAND_NET_STATUS_LED_SETUP = 0x19,
-    PCAT_PMU_MANAGER_COMMAND_NET_STATUS_LED_SETUP_ACK = 0x1A
+    PCAT_PMU_MANAGER_COMMAND_NET_STATUS_LED_SETUP_ACK = 0x1A,
+    PCAT_PMU_MANAGER_COMMAND_POWER_ON_EVENT_GET = 0x1B,
+    PCAT_PMU_MANAGER_COMMAND_POWER_ON_EVENT_GET_ACK = 0x1C,
 }PCatPMUManagerCommandType;
 
 typedef struct _PCatPMUManagerCommandData
@@ -84,6 +86,8 @@ typedef struct _PCatPMUManagerData
     gchar *pmu_fw_version;
     gint64 charger_on_auto_start_last_timestamp;
     gboolean system_time_set_flag;
+
+    guint power_on_event;
 }PCatPMUManagerData;
 
 static PCatPMUManagerData g_pcat_pmu_manager_data = {0};
@@ -453,6 +457,14 @@ static void pcat_pmu_manager_pmu_fw_version_get_internal(
 {
     pcat_pmu_serial_write_data_request(pmu_data,
         PCAT_PMU_MANAGER_COMMAND_PMU_FW_VERSION_GET, FALSE, 0,
+        NULL, 0, TRUE);
+}
+
+static void pcat_pmu_manager_power_on_event_get_internal(
+    PCatPMUManagerData *pmu_data)
+{
+    pcat_pmu_serial_write_data_request(pmu_data,
+        PCAT_PMU_MANAGER_COMMAND_POWER_ON_EVENT_GET, FALSE, 0,
         NULL, 0, TRUE);
 }
 
@@ -836,6 +848,17 @@ static void pcat_pmu_serial_read_data_parse(PCatPMUManagerData *pmu_data)
 
                         break;
                     }
+                    case PCAT_PMU_MANAGER_COMMAND_POWER_ON_EVENT_GET_ACK:
+                    {
+                        if(extra_data_len < 1)
+                        {
+                            break;
+                        }
+
+                        pmu_data->power_on_event = extra_data[0];
+
+                        break;
+                    }
                     default:
                     {
                         break;
@@ -1062,7 +1085,8 @@ static gboolean pcat_pmu_manager_check_timeout_func(gpointer user_data)
         uconfig_data = pcat_manager_main_user_config_data_get();
         if(uconfig_data->charger_on_auto_start)
         {
-            if(now > pmu_data->charger_on_auto_start_last_timestamp +
+            if((pmu_data->power_on_event==3 || pmu_data->power_on_event==4) &&
+               now > pmu_data->charger_on_auto_start_last_timestamp +
                (gint64)uconfig_data->charger_on_auto_start_timeout * 1000000L)
             {
                 pcat_manager_main_request_shutdown(TRUE);
@@ -1203,6 +1227,7 @@ gboolean pcat_pmu_manager_init()
     g_pcat_pmu_manager_data.charger_on_auto_start_last_timestamp =
         g_get_monotonic_time();
     g_pcat_pmu_manager_data.system_time_set_flag = FALSE;
+    g_pcat_pmu_manager_data.power_on_event = 0;
 
     g_mkdir_with_parents(PCAT_PMU_MANAGER_STATEFS_BATTERY_PATH, 0755);
 
@@ -1216,7 +1241,6 @@ gboolean pcat_pmu_manager_init()
 
     g_pcat_pmu_manager_data.initialized = TRUE;
 
-    pcat_pmu_manager_watchdog_timeout_set(5);
     pcat_pmu_manager_schedule_time_update_internal(&g_pcat_pmu_manager_data);
     pcat_pmu_manager_date_time_sync(&g_pcat_pmu_manager_data);
 
@@ -1226,6 +1250,10 @@ gboolean pcat_pmu_manager_init()
         uconfig_data->charger_on_auto_start);
 
     pcat_pmu_manager_pmu_fw_version_get_internal(&g_pcat_pmu_manager_data);
+
+    pcat_pmu_manager_power_on_event_get_internal(&g_pcat_pmu_manager_data);
+
+    pcat_pmu_manager_watchdog_timeout_set(5);
 
     return TRUE;
 }
