@@ -502,6 +502,8 @@ static void *pcat_main_mwan_policy_check_thread_func(void *user_data)
 
     while(g_pcat_main_mwan_route_check_flag)
     {
+        mwan3_interface_check_flag = TRUE;
+
         for(i=0;i<PCAT_MAIN_IFACE_LAST;i++)
         {
             iface_status[i] = FALSE;
@@ -604,7 +606,6 @@ static void *pcat_main_mwan_policy_check_thread_func(void *user_data)
                 break;
             }
 
-            mwan3_interface_check_flag = TRUE;
             for(i=0;i<PCAT_MAIN_IFACE_LAST;i++)
             {
                 if(!iface_status[i])
@@ -788,22 +789,26 @@ static void *pcat_main_mwan_policy_check_thread_func(void *user_data)
                 PCAT_MANAGER_ROUTE_MODE_NONE;
         }
 
-        if(TRUE)
+        if(g_get_monotonic_time() >
+            mwan3_interface_check_timestamp +
+            PCAT_MAIN_MWAN_STATUS_CHECK_TIMEOUT * 1000000L)
         {
-            if(g_get_monotonic_time() >
-                mwan3_interface_check_timestamp +
-                PCAT_MAIN_MWAN_STATUS_CHECK_TIMEOUT * 1000000L)
+            g_spawn_command_line_sync("mwan3 restart", NULL,
+                NULL, NULL, NULL);
+
+            mwan3_interface_check_timestamp = g_get_monotonic_time();
+
+            g_warning("MWAN3 status is not correct, try to restart!");
+        }
+        else
+        {
+            if(mwan3_interface_check_flag)
             {
-                g_spawn_command_line_sync("mwan3 restart", NULL,
-                    NULL, NULL, NULL);
-
-                mwan3_interface_check_timestamp = g_get_monotonic_time();
-
-                g_warning("MWAN3 status is not correct, try to restart!");
+                g_debug("MWAN3 status check OK!");
             }
             else
             {
-                g_debug("MWAN3 status check OK!");
+                g_debug("MWAN3 status ERROR!");
             }
         }
 
@@ -917,7 +922,7 @@ static void pcat_main_log_handle_func(const gchar *log_domain,
     }
 
     dt = g_date_time_new_now_local();
-    dtstr = g_date_time_format(dt, "%Y%m%d %H%M%S");
+    dtstr = g_date_time_format(dt, "%Y/%m/%d %H:%M:%S");
     g_date_time_unref(dt);
 
     outsize = g_snprintf(buffer, 16383, "[%s] %s-%s: %s\n", dtstr,
