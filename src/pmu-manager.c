@@ -382,12 +382,12 @@ static void pcat_pmu_manager_schedule_time_update_internal(
     PCatPMUManagerData *pmu_data)
 {
     guint i;
-    const PCatManagerMainUserConfigData *uconfig_data;
+    const PCatManagerUserConfigData *uconfig_data;
     const PCatManagerPowerScheduleData *sdata;
     GByteArray *startup_setup_buffer;
     guint8 v;
 
-    uconfig_data = pcat_manager_main_user_config_data_get();
+    uconfig_data = pcat_main_user_config_data_get();
     if(uconfig_data->power_schedule_data!=NULL)
     {
         startup_setup_buffer = g_byte_array_new();
@@ -789,7 +789,7 @@ static void pcat_pmu_serial_read_data_parse(PCatPMUManagerData *pmu_data)
                     }
                     case PCAT_PMU_MANAGER_COMMAND_PMU_REQUEST_SHUTDOWN:
                     {
-                        pcat_manager_main_request_shutdown(FALSE);
+                        pcat_main_request_shutdown(FALSE);
 
                         if(need_ack)
                         {
@@ -911,7 +911,7 @@ static gboolean pcat_pmu_serial_open(PCatPMUManagerData *pmu_data)
     struct termios options;
     int rspeed = B115200;
 
-    main_config_data = pcat_manager_main_config_data_get();
+    main_config_data = pcat_main_config_data_get();
 
     fd = open(main_config_data->pm_serial_device,
         O_RDWR | O_NOCTTY | O_NDELAY);
@@ -1058,7 +1058,7 @@ static void pcat_pmu_serial_close(PCatPMUManagerData *pmu_data)
 static gboolean pcat_pmu_manager_check_timeout_func(gpointer user_data)
 {
     PCatPMUManagerData *pmu_data = (PCatPMUManagerData *)user_data;
-    const PCatManagerMainUserConfigData *uconfig_data;
+    const PCatManagerUserConfigData *uconfig_data;
     const PCatManagerPowerScheduleData *sdata;
     guint i;
     GDateTime *dt;
@@ -1082,14 +1082,14 @@ static gboolean pcat_pmu_manager_check_timeout_func(gpointer user_data)
         pcat_pmu_serial_write_data_request(pmu_data,
             PCAT_PMU_MANAGER_COMMAND_HEARTBEAT, FALSE, 0, NULL, 0, FALSE);
 
-        uconfig_data = pcat_manager_main_user_config_data_get();
+        uconfig_data = pcat_main_user_config_data_get();
         if(uconfig_data->charger_on_auto_start)
         {
             if((pmu_data->power_on_event==3 || pmu_data->power_on_event==4) &&
                now > pmu_data->charger_on_auto_start_last_timestamp +
                (gint64)uconfig_data->charger_on_auto_start_timeout * 1000000L)
             {
-                pcat_manager_main_request_shutdown(TRUE);
+                pcat_main_request_shutdown(TRUE);
                 pmu_data->shutdown_planned = TRUE;
             }
         }
@@ -1179,7 +1179,7 @@ static gboolean pcat_pmu_manager_check_timeout_func(gpointer user_data)
 
                 if(need_action)
                 {
-                    pcat_manager_main_request_shutdown(TRUE);
+                    pcat_main_request_shutdown(TRUE);
                     pmu_data->shutdown_planned = TRUE;
                 }
             }
@@ -1213,7 +1213,7 @@ static gboolean pcat_pmu_manager_check_timeout_func(gpointer user_data)
 
 gboolean pcat_pmu_manager_init()
 {
-    const PCatManagerMainUserConfigData *uconfig_data;
+    const PCatManagerUserConfigData *uconfig_data;
 
     if(g_pcat_pmu_manager_data.initialized)
     {
@@ -1244,7 +1244,7 @@ gboolean pcat_pmu_manager_init()
     pcat_pmu_manager_schedule_time_update_internal(&g_pcat_pmu_manager_data);
     pcat_pmu_manager_date_time_sync(&g_pcat_pmu_manager_data);
 
-    uconfig_data = pcat_manager_main_user_config_data_get();
+    uconfig_data = pcat_main_user_config_data_get();
 
     pcat_pmu_manager_charger_on_auto_start_internal(&g_pcat_pmu_manager_data,
         uconfig_data->charger_on_auto_start);

@@ -461,13 +461,13 @@ static void pcat_controller_command_schedule_power_event_set_func(
     guint i;
     gint iv;
     PCatManagerPowerScheduleData *sdata;
-    PCatManagerMainUserConfigData *uconfig_data;
+    PCatManagerUserConfigData *uconfig_data;
     guint count_on = 0, count_off = 0;
     gboolean action;
     gint y, m, d, h, min;
     GDateTime *dt1, *dt2;
 
-    uconfig_data = pcat_manager_main_user_config_data_get();
+    uconfig_data = pcat_main_user_config_data_get();
 
     if(uconfig_data->power_schedule_data!=NULL)
     {
@@ -592,7 +592,7 @@ static void pcat_controller_command_schedule_power_event_set_func(
             }
         }
     }
-    pcat_manager_main_user_config_data_sync();
+    pcat_main_user_config_data_sync();
 
     rroot = json_object_new_object();
 
@@ -617,10 +617,10 @@ static void pcat_controller_command_schedule_power_event_get_func(
     struct json_object *rroot, *child, *array, *node;
     guint i;
     PCatManagerPowerScheduleData *sdata;
-    const PCatManagerMainUserConfigData *uconfig_data;
+    const PCatManagerUserConfigData *uconfig_data;
     GDateTime *dt1, *dt2;
 
-    uconfig_data = pcat_manager_main_user_config_data_get();
+    uconfig_data = pcat_main_user_config_data_get();
 
     rroot = json_object_new_object();
 
@@ -837,7 +837,7 @@ static void pcat_controller_command_network_route_mode_get_func(
 
     rroot = json_object_new_object();
 
-    mode = pcat_manager_main_network_route_mode_get();
+    mode = pcat_main_network_route_mode_get();
 
     switch(mode)
     {
@@ -877,9 +877,9 @@ static void pcat_controller_command_charger_on_auto_start_set_func(
     const gchar *command, struct json_object *root)
 {
     struct json_object *rroot, *child;
-    PCatManagerMainUserConfigData *uconfig_data;
+    PCatManagerUserConfigData *uconfig_data;
 
-    uconfig_data = pcat_manager_main_user_config_data_get();
+    uconfig_data = pcat_main_user_config_data_get();
 
     if(json_object_object_get_ex(root, "state", &child))
     {
@@ -908,7 +908,7 @@ static void pcat_controller_command_charger_on_auto_start_set_func(
 
     pcat_pmu_manager_charger_on_auto_start(
         uconfig_data->charger_on_auto_start);
-    pcat_manager_main_user_config_data_sync();
+    pcat_main_user_config_data_sync();
 }
 
 static void pcat_controller_command_charger_on_auto_start_get_func(
@@ -917,10 +917,10 @@ static void pcat_controller_command_charger_on_auto_start_get_func(
     const gchar *command, struct json_object *root)
 {
     struct json_object *rroot, *child;
-    const PCatManagerMainUserConfigData *uconfig_data;
+    const PCatManagerUserConfigData *uconfig_data;
     gint64 countdown;
 
-    uconfig_data = pcat_manager_main_user_config_data_get();
+    uconfig_data = pcat_main_user_config_data_get();
 
     rroot = json_object_new_object();
 

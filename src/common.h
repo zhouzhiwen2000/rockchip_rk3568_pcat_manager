@@ -22,6 +22,12 @@ typedef enum
     PCAT_MANAGER_ROUTE_MODE_MOBILE
 }PCatManagerRouteMode;
 
+typedef enum
+{
+    PCAT_MANAGER_MWAN_MODE_NONE,
+    PCAT_MANAGER_MWAN_MODE_DEFAULT
+}PCatManagerMWANMode;
+
 typedef struct _PCatManagerMainConfigData
 {
     gboolean valid;
@@ -56,7 +62,7 @@ typedef struct _PCatManagerPowerScheduleData
     guint8 dow_bits;
 }PCatManagerPowerScheduleData;
 
-typedef struct _PCatManagerMainUserConfigData
+typedef struct _PCatManagerUserConfigData
 {
     gboolean valid;
     gboolean dirty;
@@ -64,13 +70,13 @@ typedef struct _PCatManagerMainUserConfigData
     GPtrArray *power_schedule_data;
     gboolean charger_on_auto_start;
     guint charger_on_auto_start_timeout;
-}PCatManagerMainUserConfigData;
+}PCatManagerUserConfigData;
 
-PCatManagerMainConfigData *pcat_manager_main_config_data_get();
-PCatManagerMainUserConfigData *pcat_manager_main_user_config_data_get();
-void pcat_manager_main_user_config_data_sync();
-void pcat_manager_main_request_shutdown(gboolean send_pmu_request);
-PCatManagerRouteMode pcat_manager_main_network_route_mode_get();
+PCatManagerMainConfigData *pcat_main_config_data_get();
+PCatManagerUserConfigData *pcat_main_user_config_data_get();
+void pcat_main_user_config_data_sync();
+void pcat_main_request_shutdown(gboolean send_pmu_request);
+PCatManagerRouteMode pcat_main_network_route_mode_get();
 
 G_END_DECLS
 

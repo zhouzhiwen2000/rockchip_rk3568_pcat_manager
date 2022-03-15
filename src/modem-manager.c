@@ -704,7 +704,7 @@ static gpointer pcat_modem_manager_modem_work_thread_func(
     PCatModemManagerData *mm_data = (PCatModemManagerData *)user_data;
     PCatManagerMainConfigData *main_config_data;
 
-    main_config_data = pcat_manager_main_config_data_get();
+    main_config_data = pcat_main_config_data_get();
 
     while(mm_data->work_flag)
     {
@@ -802,7 +802,7 @@ gboolean pcat_modem_manager_init()
         return TRUE;
     }
 
-    main_config_data = pcat_manager_main_config_data_get();
+    main_config_data = pcat_main_config_data_get();
 
     g_pcat_modem_manager_data.work_flag = TRUE;
     g_mutex_init(&(g_pcat_modem_manager_data.mutex));

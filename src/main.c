@@ -12,18 +12,46 @@
 #include "pmu-manager.h"
 #include "controller.h"
 
-#define PCAT_MANAGER_MAIN_CONFIG_FILE "/etc/pcat-manager.conf"
-#define PCAT_MANAGER_MAIN_USER_CONFIG_FILE "/etc/pcat-manager-userdata.conf"
-#define PCAT_MANAGER_MAIN_SHUTDOWN_REQUEST_FILE "/tmp/pcat-shutdown.tmp"
+#define PCAT_MAIN_MWAN_STATUS_CHECK_TIMEOUT 120
 
-#define PCAT_MANAGER_MAIN_LOG_FILE "/tmp/pcat-manager.log"
+#define PCAT_MAIN_CONFIG_FILE "/etc/pcat-manager.conf"
+#define PCAT_MAIN_USER_CONFIG_FILE "/etc/pcat-manager-userdata.conf"
+#define PCAT_MAIN_SHUTDOWN_REQUEST_FILE "/tmp/pcat-shutdown.tmp"
 
-#define PCAT_MANAGER_MAIN_WIRED_IFACE "wan"
-#define PCAT_MANAGER_MAIN_WIRED_V6_IFACE "wan6"
-#define PCAT_MANAGER_MAIN_MOBILE_5G_IFACE "wwan_5g"
-#define PCAT_MANAGER_MAIN_MOBILE_5G_V6_IFACE "wwan_5g_v6"
-#define PCAT_MANAGER_MAIN_MOBILE_LTE_IFACE "wwan_lte"
-#define PCAT_MANAGER_MAIN_MOBILE_LTE_V6_IFACE "wwan_lte_v6"
+#define PCAT_MAIN_LOG_FILE "/tmp/pcat-manager.log"
+
+typedef enum
+{
+    PCAT_MAIN_IFACE_WIRED,
+    PCAT_MAIN_IFACE_WIRED_V6,
+    PCAT_MAIN_IFACE_MOBILE_5G,
+    PCAT_MAIN_IFACE_MOBILE_5G_V6,
+    PCAT_MAIN_IFACE_MOBILE_LTE,
+    PCAT_MAIN_IFACE_MOBILE_LTE_V6,
+    PCAT_MAIN_IFACE_LAST
+}PCatMainIfaceType;
+
+const gchar * const g_pcat_main_iface_names[
+    PCAT_MAIN_IFACE_LAST] =
+{
+    "wan",
+    "wan6",
+    "wwan_5g",
+    "wwan_5g_v6",
+    "wwan_lte",
+    "wwan_lte_v6"
+};
+
+const PCatManagerRouteMode g_pcat_main_iface_route_mode[
+    PCAT_MAIN_IFACE_LAST] =
+{
+    PCAT_MANAGER_ROUTE_MODE_WIRED,
+    PCAT_MANAGER_ROUTE_MODE_WIRED,
+    PCAT_MANAGER_ROUTE_MODE_MOBILE,
+    PCAT_MANAGER_ROUTE_MODE_MOBILE,
+    PCAT_MANAGER_ROUTE_MODE_MOBILE,
+    PCAT_MANAGER_ROUTE_MODE_MOBILE
+};
 
 static const guint g_pcat_main_shutdown_wait_max = 30;
 
@@ -38,7 +66,7 @@ static guint g_pcat_main_shutdown_wait_count = 0;
 static gboolean g_pcat_main_watchdog_disabled = FALSE;
 
 static gboolean g_pcat_main_net_status_led_work_mode = TRUE;
-static guint g_pcat_manager_main_status_check_timeout_id = 0;
+static guint g_pcat_main_status_check_timeout_id = 0;
 static PCatManagerRouteMode g_pcat_main_net_status_led_applied_mode =
     PCAT_MANAGER_ROUTE_MODE_NONE;
 
@@ -46,9 +74,11 @@ static PCatManagerRouteMode g_pcat_main_network_route_mode =
     PCAT_MANAGER_ROUTE_MODE_NONE;
 static gboolean g_pcat_main_mwan_route_check_flag = TRUE;
 
-static PCatManagerMainConfigData g_pcat_manager_main_config_data = {0};
-static PCatManagerMainUserConfigData g_pcat_manager_main_user_config_data =
+static PCatManagerMainConfigData g_pcat_main_config_data = {0};
+static PCatManagerUserConfigData g_pcat_main_user_config_data =
     {0};
+
+static FILE *g_pcat_main_debug_log_file_fp = NULL;
 
 static GOptionEntry g_pcat_cmd_entries[] =
 {
@@ -59,10 +89,10 @@ static GOptionEntry g_pcat_cmd_entries[] =
 
 static void pcat_main_config_data_clear()
 {
-    g_free(g_pcat_manager_main_config_data.pm_serial_device);
-    g_pcat_manager_main_config_data.pm_serial_device = NULL;
+    g_free(g_pcat_main_config_data.pm_serial_device);
+    g_pcat_main_config_data.pm_serial_device = NULL;
 
-    g_pcat_manager_main_config_data.valid = FALSE;
+    g_pcat_main_config_data.valid = FALSE;
 }
 
 static gboolean pcat_main_config_data_load()
@@ -71,15 +101,15 @@ static gboolean pcat_main_config_data_load()
     GError *error = NULL;
     gint ivalue;
 
-    g_pcat_manager_main_config_data.valid = FALSE;
+    g_pcat_main_config_data.valid = FALSE;
 
     keyfile = g_key_file_new();
 
-    if(!g_key_file_load_from_file(keyfile, PCAT_MANAGER_MAIN_CONFIG_FILE,
+    if(!g_key_file_load_from_file(keyfile, PCAT_MAIN_CONFIG_FILE,
         G_KEY_FILE_NONE, &error))
     {
         g_warning("Failed to load keyfile %s: %s!",
-            PCAT_MANAGER_MAIN_CONFIG_FILE,
+            PCAT_MAIN_CONFIG_FILE,
             error->message!=NULL ? error->message : "Unknown");
 
         g_clear_error(&error);
@@ -87,77 +117,77 @@ static gboolean pcat_main_config_data_load()
         return FALSE;
     }
 
-    if(g_pcat_manager_main_config_data.hw_gpio_modem_power_chip!=NULL)
+    if(g_pcat_main_config_data.hw_gpio_modem_power_chip!=NULL)
     {
-        g_free(g_pcat_manager_main_config_data.hw_gpio_modem_power_chip);
+        g_free(g_pcat_main_config_data.hw_gpio_modem_power_chip);
     }
-    g_pcat_manager_main_config_data.hw_gpio_modem_power_chip =
+    g_pcat_main_config_data.hw_gpio_modem_power_chip =
         g_key_file_get_string(keyfile, "Hardware", "GPIOModemPowerChip", NULL);
 
     ivalue = g_key_file_get_integer(keyfile, "Hardware",
         "GPIOModemPowerLine", NULL);
-    g_pcat_manager_main_config_data.hw_gpio_modem_power_line = ivalue;
+    g_pcat_main_config_data.hw_gpio_modem_power_line = ivalue;
 
     ivalue = g_key_file_get_integer(keyfile, "Hardware",
         "GPIOModemPowerActiveLow", NULL);
-    g_pcat_manager_main_config_data.hw_gpio_modem_power_active_low =
+    g_pcat_main_config_data.hw_gpio_modem_power_active_low =
         (ivalue!=0);
 
-    if(g_pcat_manager_main_config_data.hw_gpio_modem_rf_kill_chip!=NULL)
+    if(g_pcat_main_config_data.hw_gpio_modem_rf_kill_chip!=NULL)
     {
-        g_free(g_pcat_manager_main_config_data.hw_gpio_modem_rf_kill_chip);
+        g_free(g_pcat_main_config_data.hw_gpio_modem_rf_kill_chip);
     }
-    g_pcat_manager_main_config_data.hw_gpio_modem_rf_kill_chip =
+    g_pcat_main_config_data.hw_gpio_modem_rf_kill_chip =
         g_key_file_get_string(keyfile, "Hardware", "GPIOModemRFKillChip", NULL);
 
     ivalue = g_key_file_get_integer(keyfile, "Hardware",
         "GPIOModemRFKillLine", NULL);
-    g_pcat_manager_main_config_data.hw_gpio_modem_rf_kill_line = ivalue;
+    g_pcat_main_config_data.hw_gpio_modem_rf_kill_line = ivalue;
 
     ivalue = g_key_file_get_integer(keyfile, "Hardware",
         "GPIOModemRFKillActiveLow", NULL);
-    g_pcat_manager_main_config_data.hw_gpio_modem_rf_kill_active_low =
+    g_pcat_main_config_data.hw_gpio_modem_rf_kill_active_low =
         (ivalue!=0);
 
-    if(g_pcat_manager_main_config_data.hw_gpio_modem_reset_chip!=NULL)
+    if(g_pcat_main_config_data.hw_gpio_modem_reset_chip!=NULL)
     {
-        g_free(g_pcat_manager_main_config_data.hw_gpio_modem_reset_chip);
+        g_free(g_pcat_main_config_data.hw_gpio_modem_reset_chip);
     }
-    g_pcat_manager_main_config_data.hw_gpio_modem_reset_chip =
+    g_pcat_main_config_data.hw_gpio_modem_reset_chip =
         g_key_file_get_string(keyfile, "Hardware", "GPIOModemResetChip", NULL);
 
     ivalue = g_key_file_get_integer(keyfile, "Hardware",
         "GPIOModemResetLine", NULL);
-    g_pcat_manager_main_config_data.hw_gpio_modem_reset_line = ivalue;
+    g_pcat_main_config_data.hw_gpio_modem_reset_line = ivalue;
 
     ivalue = g_key_file_get_integer(keyfile, "Hardware",
         "GPIOModemResetActiveLow", NULL);
-    g_pcat_manager_main_config_data.hw_gpio_modem_reset_active_low =
+    g_pcat_main_config_data.hw_gpio_modem_reset_active_low =
         (ivalue!=0);
 
-    if(g_pcat_manager_main_config_data.pm_serial_device!=NULL)
+    if(g_pcat_main_config_data.pm_serial_device!=NULL)
     {
-        g_free(g_pcat_manager_main_config_data.pm_serial_device);
+        g_free(g_pcat_main_config_data.pm_serial_device);
     }
-    g_pcat_manager_main_config_data.pm_serial_device = g_key_file_get_string(
+    g_pcat_main_config_data.pm_serial_device = g_key_file_get_string(
         keyfile, "PowerManager", "SerialDevice", NULL);
 
     ivalue = g_key_file_get_integer(keyfile, "PowerManager",
         "SerialBaud", NULL);
-    g_pcat_manager_main_config_data.pm_serial_baud = ivalue;
+    g_pcat_main_config_data.pm_serial_baud = ivalue;
 
     ivalue = g_key_file_get_integer(keyfile, "Debug",
         "ModemExternalExecStdoutLog", NULL);
-    g_pcat_manager_main_config_data.debug_modem_external_exec_stdout_log =
+    g_pcat_main_config_data.debug_modem_external_exec_stdout_log =
         ivalue;
 
     ivalue = g_key_file_get_integer(keyfile, "Debug",
         "OutputLog", NULL);
-    g_pcat_manager_main_config_data.debug_output_log = ivalue;
+    g_pcat_main_config_data.debug_output_log = ivalue;
 
     g_key_file_unref(keyfile);
 
-    g_pcat_manager_main_config_data.valid = TRUE;
+    g_pcat_main_config_data.valid = TRUE;
 
     return TRUE;
 }
@@ -169,19 +199,19 @@ static gboolean pcat_main_user_config_data_load()
     gint iv;
     guint i;
     gchar item_name[32] = {0};
-    PCatManagerMainUserConfigData *uconfig_data =
-        &g_pcat_manager_main_user_config_data;
+    PCatManagerUserConfigData *uconfig_data =
+        &g_pcat_main_user_config_data;
     PCatManagerPowerScheduleData *sdata;
 
     uconfig_data->valid = FALSE;
 
     keyfile = g_key_file_new();
 
-    if(!g_key_file_load_from_file(keyfile, PCAT_MANAGER_MAIN_USER_CONFIG_FILE,
+    if(!g_key_file_load_from_file(keyfile, PCAT_MAIN_USER_CONFIG_FILE,
         G_KEY_FILE_NONE, &error))
     {
         g_warning("Failed to load keyfile %s: %s!",
-            PCAT_MANAGER_MAIN_USER_CONFIG_FILE,
+            PCAT_MAIN_USER_CONFIG_FILE,
             error->message!=NULL ? error->message : "Unknown");
 
         g_clear_error(&error);
@@ -260,8 +290,8 @@ static gboolean pcat_main_user_config_data_save()
     GError *error = NULL;
     guint i;
     gchar item_name[32] = {0};
-    PCatManagerMainUserConfigData *uconfig_data =
-        &g_pcat_manager_main_user_config_data;
+    PCatManagerUserConfigData *uconfig_data =
+        &g_pcat_main_user_config_data;
     PCatManagerPowerScheduleData *sdata;
     gboolean ret;
 
@@ -306,7 +336,7 @@ static gboolean pcat_main_user_config_data_save()
     g_key_file_set_integer(keyfile, "General", "ChargerOnAutoStartTimeout",
         uconfig_data->charger_on_auto_start_timeout);
 
-    ret = g_key_file_save_to_file(keyfile, PCAT_MANAGER_MAIN_USER_CONFIG_FILE,
+    ret = g_key_file_save_to_file(keyfile, PCAT_MAIN_USER_CONFIG_FILE,
         &error);
     if(ret)
     {
@@ -315,7 +345,7 @@ static gboolean pcat_main_user_config_data_save()
     else
     {
         g_warning("Failed to save user configuration data to file %s: %s",
-            PCAT_MANAGER_MAIN_USER_CONFIG_FILE, error->message!=NULL ?
+            PCAT_MAIN_USER_CONFIG_FILE, error->message!=NULL ?
             error->message : "Unknown");
     }
 
@@ -324,7 +354,7 @@ static gboolean pcat_main_user_config_data_save()
     return TRUE;
 }
 
-static gboolean pcat_manager_main_shutdown_check_timeout_func(
+static gboolean pcat_main_shutdown_check_timeout_func(
     gpointer user_data)
 {
     if(pcat_pmu_manager_shutdown_completed())
@@ -353,7 +383,7 @@ static gboolean pcat_manager_main_shutdown_check_timeout_func(
     return TRUE;
 }
 
-static gboolean pcat_manager_main_reboot_check_timeout_func(
+static gboolean pcat_main_reboot_check_timeout_func(
     gpointer user_data)
 {
     if(pcat_pmu_manager_reboot_completed())
@@ -382,7 +412,7 @@ static gboolean pcat_manager_main_reboot_check_timeout_func(
     return TRUE;
 }
 
-static void pcat_manager_main_system_shutdown()
+static void pcat_main_system_shutdown()
 {
     if(g_pcat_main_shutdown)
     {
@@ -393,7 +423,7 @@ static void pcat_manager_main_system_shutdown()
     {
         pcat_pmu_manager_shutdown_request();
         g_timeout_add_seconds(1,
-            pcat_manager_main_shutdown_check_timeout_func, NULL);
+            pcat_main_shutdown_check_timeout_func, NULL);
     }
     else
     {
@@ -403,7 +433,7 @@ static void pcat_manager_main_system_shutdown()
     g_pcat_main_shutdown = TRUE;
 }
 
-static void pcat_manager_main_system_reboot()
+static void pcat_main_system_reboot()
 {
     if(g_pcat_main_reboot)
     {
@@ -412,7 +442,7 @@ static void pcat_manager_main_system_reboot()
 
     pcat_pmu_manager_reboot_request();
     g_timeout_add_seconds(1,
-        pcat_manager_main_reboot_check_timeout_func, NULL);
+        pcat_main_reboot_check_timeout_func, NULL);
 
     g_pcat_main_reboot = TRUE;
 }
@@ -422,14 +452,14 @@ static gboolean pcat_main_sigterm_func(gpointer user_data)
     g_message("SIGTERM detected.");
 
     if(g_pcat_main_request_shutdown ||
-        g_file_test(PCAT_MANAGER_MAIN_SHUTDOWN_REQUEST_FILE,
+        g_file_test(PCAT_MAIN_SHUTDOWN_REQUEST_FILE,
         G_FILE_TEST_IS_REGULAR | G_FILE_TEST_EXISTS))
     {
-        pcat_manager_main_system_shutdown();
+        pcat_main_system_shutdown();
     }
     else if(!g_pcat_main_watchdog_disabled)
     {
-        pcat_manager_main_system_reboot();
+        pcat_main_system_reboot();
     }
     else
     {
@@ -452,17 +482,99 @@ static gboolean pcat_main_sigusr1_func(gpointer user_data)
 
 static void *pcat_main_mwan_policy_check_thread_func(void *user_data)
 {
-    guint i;
+    guint i, j;
+    gchar *command;
+    gchar *interface_status_stdout = NULL;
     gchar *mwan3_stdout = NULL;
     struct json_tokener *tokener;
     struct json_object *root, *child, *protocol, *policies, *rules, *rule;
+    struct json_object *interfaces, *interface;
     guint rules_len;
     const gchar *iface, *upercent;
     guint percent;
     gboolean ret;
+    PCatMainIfaceType route_iface;
+    gboolean iface_status[PCAT_MAIN_IFACE_LAST];
+    gboolean mwan3_interface_check_flag;
+    gint64 mwan3_interface_check_timestamp;
+
+    mwan3_interface_check_timestamp = g_get_monotonic_time();
 
     while(g_pcat_main_mwan_route_check_flag)
     {
+        for(i=0;i<PCAT_MAIN_IFACE_LAST;i++)
+        {
+            iface_status[i] = FALSE;
+
+            command = g_strdup_printf("ubus call network.interface.%s status",
+                g_pcat_main_iface_names[i]);
+            g_spawn_command_line_sync(command, &interface_status_stdout,
+                NULL, NULL, NULL);
+            g_free(command);
+
+            G_STMT_START
+            {
+                if(interface_status_stdout==NULL)
+                {
+                    break;
+                }
+
+                tokener = json_tokener_new();
+                root = json_tokener_parse_ex(tokener, interface_status_stdout,
+                    strlen(interface_status_stdout));
+                json_tokener_free(tokener);
+
+                if(root==NULL)
+                {
+                    break;
+                }
+
+                if(json_object_object_get_ex(root, "up", &child))
+                {
+                    if(!json_object_get_boolean(child))
+                    {
+                        json_object_put(root);
+
+                        break;
+                    }
+                }
+                else
+                {
+                    json_object_put(root);
+
+                    break;
+                }
+
+                ret = FALSE;
+                if(json_object_object_get_ex(root, "ipv4-address", &child))
+                {
+                    if(json_object_get_type(child)==json_type_array &&
+                       json_object_array_length(child) > 0)
+                    {
+                        ret = TRUE;
+                    }
+                }
+
+                if(json_object_object_get_ex(root, "ipv6-address", &child))
+                {
+                    if(json_object_get_type(child)==json_type_array &&
+                       json_object_array_length(child) > 0)
+                    {
+                        ret = TRUE;
+                    }
+                }
+                if(ret)
+                {
+                    iface_status[i] = TRUE;
+                }
+
+                json_object_put(root);
+            }
+            G_STMT_END;
+
+            g_free(interface_status_stdout);
+        }
+
         g_spawn_command_line_sync("ubus call mwan3 status", &mwan3_stdout,
             NULL, NULL, NULL);
 
@@ -483,6 +595,49 @@ static void *pcat_main_mwan_policy_check_thread_func(void *user_data)
             if(root==NULL)
             {
                 break;
+            }
+
+            if(!json_object_object_get_ex(root, "interfaces", &interfaces))
+            {
+                json_object_put(root);
+
+                break;
+            }
+
+            mwan3_interface_check_flag = TRUE;
+            for(i=0;i<PCAT_MAIN_IFACE_LAST;i++)
+            {
+                if(!iface_status[i])
+                {
+                    continue;
+                }
+
+                if(!json_object_object_get_ex(interfaces,
+                    g_pcat_main_iface_names[i], &interface))
+                {
+                    continue;
+                }
+
+                if(json_object_object_get_ex(interface, "status", &child))
+                {
+                    if(g_strcmp0(json_object_get_string(child), "online")!=0)
+                    {
+                        mwan3_interface_check_flag = FALSE;
+
+                        break;
+                    }
+                }
+                else
+                {
+                    mwan3_interface_check_flag = FALSE;
+
+                    break;
+                }
+            }
+
+            if(mwan3_interface_check_flag)
+            {
+                mwan3_interface_check_timestamp = g_get_monotonic_time();
             }
 
             if(!json_object_object_get_ex(root, "policies", &policies))
@@ -520,36 +675,33 @@ static void *pcat_main_mwan_policy_check_thread_func(void *user_data)
                             }
                         }
 
+                        route_iface = PCAT_MAIN_IFACE_LAST;
+
                         if(percent > 0)
                         {
-                            if(g_strcmp0(iface,
-                                PCAT_MANAGER_MAIN_WIRED_IFACE)==0)
+                            for(j=0;j<PCAT_MAIN_IFACE_LAST;j++)
                             {
-                                g_pcat_main_network_route_mode =
-                                    PCAT_MANAGER_ROUTE_MODE_WIRED;
+                                if(g_strcmp0(iface,
+                                    g_pcat_main_iface_names[j])==0)
+                                {
+                                    route_iface = j;
 
-                                ret = TRUE;
-                            }
-                            else if(g_strcmp0(iface,
-                                PCAT_MANAGER_MAIN_MOBILE_5G_IFACE)==0)
-                            {
-                                g_pcat_main_network_route_mode =
-                                    PCAT_MANAGER_ROUTE_MODE_MOBILE;
+                                    ret = TRUE;
 
-                                ret = TRUE;
-                            }
-                            else if(g_strcmp0(iface,
-                                PCAT_MANAGER_MAIN_MOBILE_LTE_IFACE)==0)
-                            {
-                                g_pcat_main_network_route_mode =
-                                    PCAT_MANAGER_ROUTE_MODE_MOBILE;
-
-                                ret = TRUE;
+                                    break;
+                                }
                             }
                         }
 
                         if(ret)
                         {
+                            if(route_iface!=PCAT_MAIN_IFACE_LAST)
+                            {
+                                g_pcat_main_network_route_mode =
+                                    g_pcat_main_iface_route_mode[
+                                    route_iface];
+                            }
+
                             break;
                         }
                     }
@@ -591,36 +743,33 @@ static void *pcat_main_mwan_policy_check_thread_func(void *user_data)
                             }
                         }
 
+                        route_iface = PCAT_MAIN_IFACE_LAST;
+
                         if(percent > 0)
                         {
-                            if(g_strcmp0(iface,
-                                PCAT_MANAGER_MAIN_WIRED_V6_IFACE)==0)
+                            for(j=0;j<PCAT_MAIN_IFACE_LAST;j++)
                             {
-                                g_pcat_main_network_route_mode =
-                                    PCAT_MANAGER_ROUTE_MODE_WIRED;
+                                if(g_strcmp0(iface,
+                                    g_pcat_main_iface_names[j])==0)
+                                {
+                                    route_iface = j;
 
-                                ret = TRUE;
-                            }
-                            else if(g_strcmp0(iface,
-                                PCAT_MANAGER_MAIN_MOBILE_5G_V6_IFACE)==0)
-                            {
-                                g_pcat_main_network_route_mode =
-                                    PCAT_MANAGER_ROUTE_MODE_MOBILE;
+                                    ret = TRUE;
 
-                                ret = TRUE;
-                            }
-                            else if(g_strcmp0(iface,
-                                PCAT_MANAGER_MAIN_MOBILE_LTE_V6_IFACE)==0)
-                            {
-                                g_pcat_main_network_route_mode =
-                                    PCAT_MANAGER_ROUTE_MODE_MOBILE;
-
-                                ret = TRUE;
+                                    break;
+                                }
                             }
                         }
 
                         if(ret)
                         {
+                            if(route_iface!=PCAT_MAIN_IFACE_LAST)
+                            {
+                                g_pcat_main_network_route_mode =
+                                    g_pcat_main_iface_route_mode[
+                                    route_iface];
+                            }
+
                             break;
                         }
                     }
@@ -637,6 +786,25 @@ static void *pcat_main_mwan_policy_check_thread_func(void *user_data)
         {
             g_pcat_main_network_route_mode =
                 PCAT_MANAGER_ROUTE_MODE_NONE;
+        }
+
+        if(TRUE)
+        {
+            if(g_get_monotonic_time() >
+                mwan3_interface_check_timestamp +
+                PCAT_MAIN_MWAN_STATUS_CHECK_TIMEOUT * 1000000L)
+            {
+                g_spawn_command_line_sync("mwan3 restart", NULL,
+                    NULL, NULL, NULL);
+
+                mwan3_interface_check_timestamp = g_get_monotonic_time();
+
+                g_warning("MWAN3 status is not correct, try to restart!");
+            }
+            else
+            {
+                g_debug("MWAN3 status check OK!");
+            }
         }
 
         for(i=0;i<50 && g_pcat_main_mwan_route_check_flag;i++)
@@ -694,6 +862,86 @@ static gboolean pcat_main_status_check_timeout_func(gpointer user_data)
     return TRUE;
 }
 
+static void pcat_main_log_handle_func(const gchar *log_domain,
+    GLogLevelFlags log_level, const gchar *message, gpointer user_data)
+{
+    const char *level = "";
+	GLogLevelFlags minlevel = G_LOG_LEVEL_INFO;
+    gchar buffer[16384] = {0};
+    gint outsize;
+    GDateTime *dt;
+    gchar *dtstr;
+
+	switch(log_level)
+    {
+		case G_LOG_LEVEL_DEBUG:
+        {
+            level = "DEBUG";
+            break;
+        }
+		case G_LOG_LEVEL_INFO:
+        {
+            level = "INFO";
+            break;
+        }
+		case G_LOG_LEVEL_MESSAGE:
+        {
+            level = "MESSAGE";
+            break;
+        }
+		case G_LOG_LEVEL_WARNING:
+        {
+            level = "WARNING";
+            break;
+        }
+		case G_LOG_LEVEL_CRITICAL:
+        {
+            level = "CRITICAL";
+            break;
+        }
+		case G_LOG_LEVEL_ERROR:
+        {
+            level = "ERROR";
+            break;
+        }
+		default:
+        {
+            level = "UNKNOWN";
+            break;
+        }
+	}
+
+    if(log_domain==NULL)
+    {
+        log_domain = "";
+    }
+
+    dt = g_date_time_new_now_local();
+    dtstr = g_date_time_format(dt, "%Y%m%d %H%M%S");
+    g_date_time_unref(dt);
+
+    outsize = g_snprintf(buffer, 16383, "[%s] %s-%s: %s\n", dtstr,
+        log_domain, level, message);
+    g_free(dtstr);
+
+    if(g_pcat_main_debug_log_file_fp !=NULL && outsize > 0)
+    {
+        fwrite(buffer, 1, outsize, g_pcat_main_debug_log_file_fp);
+        fflush(g_pcat_main_debug_log_file_fp);
+    }
+
+	if(log_level <= minlevel && outsize > 0)
+    {
+		fprintf(stderr, "%s", buffer);
+	}
+	if(log_level <= G_LOG_LEVEL_ERROR)
+    {
+        fprintf(stderr, "%s", buffer);
+		abort();
+    }
+}
+
+
 int main(int argc, char *argv[])
 {
     GError *error = NULL;
@@ -716,8 +964,12 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    if(g_pcat_manager_main_config_data.debug_output_log)
+    if(g_pcat_main_config_data.debug_output_log)
     {
+        g_pcat_main_debug_log_file_fp = fopen(PCAT_MAIN_LOG_FILE, "w+");
+
+        g_log_set_handler(NULL, G_LOG_LEVEL_MASK | G_LOG_FLAG_FATAL |
+            G_LOG_FLAG_RECURSION, pcat_main_log_handle_func, NULL);
 
     }
 
@@ -765,15 +1017,15 @@ int main(int argc, char *argv[])
         pthread_detach(mwan_policy_check_thread);
     }
 
-    g_pcat_manager_main_status_check_timeout_id =
+    g_pcat_main_status_check_timeout_id =
         g_timeout_add_seconds(2, pcat_main_status_check_timeout_func, NULL);
 
     g_main_loop_run(g_pcat_main_loop);
 
-    if(g_pcat_manager_main_status_check_timeout_id > 0)
+    if(g_pcat_main_status_check_timeout_id > 0)
     {
-        g_source_remove(g_pcat_manager_main_status_check_timeout_id);
-        g_pcat_manager_main_status_check_timeout_id = 0;
+        g_source_remove(g_pcat_main_status_check_timeout_id);
+        g_pcat_main_status_check_timeout_id = 0;
     }
 
     g_pcat_main_mwan_route_check_flag = FALSE;
@@ -787,32 +1039,38 @@ int main(int argc, char *argv[])
     g_option_context_free(context);
     pcat_main_config_data_clear();
 
+    if(g_pcat_main_debug_log_file_fp!=NULL)
+    {
+        fclose(g_pcat_main_debug_log_file_fp);
+        g_pcat_main_debug_log_file_fp = NULL;
+    }
+
     return 0;
 }
 
-PCatManagerMainConfigData *pcat_manager_main_config_data_get()
+PCatManagerMainConfigData *pcat_main_config_data_get()
 {
-    return &g_pcat_manager_main_config_data;
+    return &g_pcat_main_config_data;
 }
 
-PCatManagerMainUserConfigData *pcat_manager_main_user_config_data_get()
+PCatManagerUserConfigData *pcat_main_user_config_data_get()
 {
-    return &g_pcat_manager_main_user_config_data;
+    return &g_pcat_main_user_config_data;
 }
 
-void pcat_manager_main_request_shutdown(gboolean send_pmu_request)
+void pcat_main_request_shutdown(gboolean send_pmu_request)
 {
     g_pcat_main_request_shutdown = TRUE;
     g_pcat_main_request_shutdown_send_pmu_request = send_pmu_request;
     g_spawn_command_line_async("poweroff", NULL);
 }
 
-void pcat_manager_main_user_config_data_sync()
+void pcat_main_user_config_data_sync()
 {
     pcat_main_user_config_data_save();
 }
 
-PCatManagerRouteMode pcat_manager_main_network_route_mode_get()
+PCatManagerRouteMode pcat_main_network_route_mode_get()
 {
     return g_pcat_main_network_route_mode;
 }
