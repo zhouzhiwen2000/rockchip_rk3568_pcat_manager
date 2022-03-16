@@ -851,6 +851,11 @@ static void pcat_controller_command_network_route_mode_get_func(
             mode_str = "mobile";
             break;
         }
+        case PCAT_MANAGER_ROUTE_MODE_UNKNOWN:
+        {
+            mode_str = "unknown";
+            break;
+        }
         default:
         {
             break;

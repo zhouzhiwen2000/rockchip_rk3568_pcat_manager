@@ -73,6 +73,7 @@ static PCatManagerRouteMode g_pcat_main_net_status_led_applied_mode =
 static PCatManagerRouteMode g_pcat_main_network_route_mode =
     PCAT_MANAGER_ROUTE_MODE_NONE;
 static gboolean g_pcat_main_mwan_route_check_flag = TRUE;
+static gboolean g_pcat_main_connection_check_flag = TRUE;
 
 static PCatManagerMainConfigData g_pcat_main_config_data = {0};
 static PCatManagerUserConfigData g_pcat_main_user_config_data =
@@ -785,8 +786,12 @@ static void *pcat_main_mwan_policy_check_thread_func(void *user_data)
 
         if(!ret)
         {
-            g_pcat_main_network_route_mode =
-                PCAT_MANAGER_ROUTE_MODE_NONE;
+            if(g_pcat_main_network_route_mode >
+                PCAT_MANAGER_ROUTE_MODE_UNKNOWN)
+            {
+                g_pcat_main_network_route_mode =
+                    PCAT_MANAGER_ROUTE_MODE_NONE;
+            }
         }
 
         if(g_get_monotonic_time() >
@@ -821,6 +826,60 @@ static void *pcat_main_mwan_policy_check_thread_func(void *user_data)
     return NULL;
 }
 
+static void *pcat_main_connection_check_thread_func(void *user_data)
+{
+    guint i;
+    static const gchar * const check_address_list[] = {"1.1.1.1", "8.8.8.8",
+        "114.114.114.114", "223.6.6.6", NULL};
+    gboolean connection_status;
+    gchar *command;
+    gint wstatus;
+
+    while(g_pcat_main_connection_check_flag)
+    {
+        if(g_pcat_main_network_route_mode > PCAT_MANAGER_ROUTE_MODE_UNKNOWN)
+        {
+            for(i=0;i<50 && g_pcat_main_connection_check_flag;i++)
+            {
+                g_usleep(100000);
+            }
+
+            continue;
+        }
+
+        connection_status = FALSE;
+        for(i=0;check_address_list[i]!=NULL;i++)
+        {
+            command = g_strdup_printf("ping -W 3 -w 3 -c 4 -q %s",
+                check_address_list[i]);
+            if(g_spawn_command_line_sync(command, NULL,
+                NULL, &wstatus, NULL))
+            {
+                if(WIFEXITED(wstatus) && WEXITSTATUS(wstatus)==0)
+                {
+                    connection_status = TRUE;
+
+                    break;
+                }
+            }
+            g_free(command);
+        }
+
+        if(g_pcat_main_network_route_mode <= PCAT_MANAGER_ROUTE_MODE_UNKNOWN)
+        {
+            g_pcat_main_network_route_mode = connection_status ?
+                PCAT_MANAGER_ROUTE_MODE_UNKNOWN : PCAT_MANAGER_ROUTE_MODE_NONE;
+        }
+
+        for(i=0;i<50 && g_pcat_main_connection_check_flag;i++)
+        {
+            g_usleep(100000);
+        }
+    }
+
+    return NULL;
+}
+
 static gboolean pcat_main_status_check_timeout_func(gpointer user_data)
 {
     if(g_pcat_main_net_status_led_applied_mode!=
@@ -844,6 +903,16 @@ static gboolean pcat_main_status_check_timeout_func(gpointer user_data)
                 {
                     pcat_pmu_manager_net_status_led_setup(
                         20, 380, 0);
+                }
+
+                break;
+            }
+            case PCAT_MANAGER_ROUTE_MODE_UNKNOWN:
+            {
+                if(g_pcat_main_net_status_led_work_mode)
+                {
+                    pcat_pmu_manager_net_status_led_setup(
+                        100, 0, 0);
                 }
 
                 break;
@@ -952,6 +1021,7 @@ int main(int argc, char *argv[])
     GError *error = NULL;
     GOptionContext *context;
     pthread_t mwan_policy_check_thread;
+    pthread_t connection_check_thread;
 
     context = g_option_context_new("- PCat System Manager");
     g_option_context_set_ignore_unknown_options(context, TRUE);
@@ -971,7 +1041,7 @@ int main(int argc, char *argv[])
 
     if(g_pcat_main_config_data.debug_output_log)
     {
-        g_pcat_main_debug_log_file_fp = fopen(PCAT_MAIN_LOG_FILE, "w+");
+        g_pcat_main_debug_log_file_fp = fopen(PCAT_MAIN_LOG_FILE, "w");
 
         g_log_set_handler(NULL, G_LOG_LEVEL_MASK | G_LOG_FLAG_FATAL |
             G_LOG_FLAG_RECURSION, pcat_main_log_handle_func, NULL);
@@ -1022,6 +1092,17 @@ int main(int argc, char *argv[])
         pthread_detach(mwan_policy_check_thread);
     }
 
+    if(pthread_create(&connection_check_thread, NULL,
+        pcat_main_connection_check_thread_func, NULL)!=0)
+    {
+        g_warning("Failed to create connection check thread, routing "
+            "check may not work correctly!");
+    }
+    else
+    {
+        pthread_detach(connection_check_thread);
+    }
+
     g_pcat_main_status_check_timeout_id =
         g_timeout_add_seconds(2, pcat_main_status_check_timeout_func, NULL);
 
@@ -1034,6 +1115,7 @@ int main(int argc, char *argv[])
     }
 
     g_pcat_main_mwan_route_check_flag = FALSE;
+    g_pcat_main_connection_check_flag = FALSE;
 
     g_main_loop_unref(g_pcat_main_loop);
     g_pcat_main_loop = NULL;
