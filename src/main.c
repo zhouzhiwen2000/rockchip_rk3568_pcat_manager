@@ -851,7 +851,8 @@ static void *pcat_main_connection_check_thread_func(void *user_data)
         connection_status = FALSE;
         for(retry_count=0;retry_count < 5 && !connection_status;retry_count++)
         {
-            for(i=0;check_address_list[i]!=NULL;i++)
+            for(i=0;check_address_list[i]!=NULL &&
+                g_pcat_main_connection_check_flag;i++)
             {
                 command = g_strdup_printf("ping -W 3 -w 3 -c 1 -q %s",
                     check_address_list[i]);
