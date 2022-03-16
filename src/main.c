@@ -850,16 +850,23 @@ static void *pcat_main_connection_check_thread_func(void *user_data)
         connection_status = FALSE;
         for(i=0;check_address_list[i]!=NULL;i++)
         {
-            command = g_strdup_printf("ping -W 3 -w 3 -c 4 -q %s",
+            command = g_strdup_printf("ping -W 3 -w 3 -c 1 -q %s",
                 check_address_list[i]);
             if(g_spawn_command_line_sync(command, NULL,
                 NULL, &wstatus, NULL))
             {
-                if(WIFEXITED(wstatus) && WEXITSTATUS(wstatus)==0)
+                if(WIFEXITED(wstatus))
                 {
-                    connection_status = TRUE;
+                    g_debug("Ping check on %s status: %d",
+                        check_address_list[i], WEXITSTATUS(wstatus));
 
-                    break;
+                    if(WEXITSTATUS(wstatus)==0)
+                    {
+                        connection_status = TRUE;
+                        g_free(command);
+
+                        break;
+                    }
                 }
             }
             g_free(command);
