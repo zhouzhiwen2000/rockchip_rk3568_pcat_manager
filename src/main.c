@@ -834,6 +834,7 @@ static void *pcat_main_connection_check_thread_func(void *user_data)
     gboolean connection_status;
     gchar *command;
     gint wstatus;
+    guint retry_count = 0;
 
     while(g_pcat_main_connection_check_flag)
     {
@@ -848,28 +849,31 @@ static void *pcat_main_connection_check_thread_func(void *user_data)
         }
 
         connection_status = FALSE;
-        for(i=0;check_address_list[i]!=NULL;i++)
+        for(retry_count=0;retry_count < 5 && !connection_status;retry_count++)
         {
-            command = g_strdup_printf("ping -W 3 -w 3 -c 1 -q %s",
-                check_address_list[i]);
-            if(g_spawn_command_line_sync(command, NULL,
-                NULL, &wstatus, NULL))
+            for(i=0;check_address_list[i]!=NULL;i++)
             {
-                if(WIFEXITED(wstatus))
+                command = g_strdup_printf("ping -W 3 -w 3 -c 1 -q %s",
+                    check_address_list[i]);
+                if(g_spawn_command_line_sync(command, NULL,
+                    NULL, &wstatus, NULL))
                 {
-                    g_debug("Ping check on %s status: %d",
-                        check_address_list[i], WEXITSTATUS(wstatus));
-
-                    if(WEXITSTATUS(wstatus)==0)
+                    if(WIFEXITED(wstatus))
                     {
-                        connection_status = TRUE;
-                        g_free(command);
+                        g_debug("Ping check on %s status: %d",
+                            check_address_list[i], WEXITSTATUS(wstatus));
 
-                        break;
+                        if(WEXITSTATUS(wstatus)==0)
+                        {
+                            connection_status = TRUE;
+                            g_free(command);
+
+                            break;
+                        }
                     }
                 }
+                g_free(command);
             }
-            g_free(command);
         }
 
         if(g_pcat_main_network_route_mode <= PCAT_MANAGER_ROUTE_MODE_UNKNOWN)
