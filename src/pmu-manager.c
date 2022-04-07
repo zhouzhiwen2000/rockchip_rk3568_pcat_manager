@@ -8,6 +8,7 @@
 #include <fcntl.h>
 
 #include "pmu-manager.h"
+#include "modem-manager.h"
 #include "common.h"
 
 #define PCAT_PMU_MANAGER_STATEFS_BATTERY_PATH "/run/state/namespaces/Battery"
@@ -38,6 +39,8 @@ typedef enum
     PCAT_PMU_MANAGER_COMMAND_WATCHDOG_TIMEOUT_SET_ACK = 0x14,
     PCAT_PMU_MANAGER_COMMAND_CHARGER_ON_AUTO_START = 0x15,
     PCAT_PMU_MANAGER_COMMAND_CHARGER_ON_AUTO_START_ACK = 0x16,
+    PCAT_PMU_MANAGER_COMMAND_VOLTAGE_THRESHOLD_SET = 0x17,
+    PCAT_PMU_MANAGER_COMMAND_VOLTAGE_THRESHOLD_SET_ACK = 0x18,
     PCAT_PMU_MANAGER_COMMAND_NET_STATUS_LED_SETUP = 0x19,
     PCAT_PMU_MANAGER_COMMAND_NET_STATUS_LED_SETUP_ACK = 0x1A,
     PCAT_PMU_MANAGER_COMMAND_POWER_ON_EVENT_GET = 0x1B,
@@ -88,6 +91,7 @@ typedef struct _PCatPMUManagerData
     gboolean system_time_set_flag;
 
     guint power_on_event;
+    PCatModemManagerDeviceType modem_device_type;
 }PCatPMUManagerData;
 
 static PCatPMUManagerData g_pcat_pmu_manager_data = {0};
@@ -489,6 +493,68 @@ static void pcat_pmu_manager_net_status_led_setup_internal(
         buffer, 6, TRUE);
 }
 
+static void pcat_pmu_manager_voltage_threshold_set_interval(
+    PCatPMUManagerData *pmu_data, guint led_vh, guint led_vm,
+    guint led_vl, guint startup_voltage, guint charger_voltage,
+    guint shutdown_voltage, guint led_work_vl, guint charger_fast_voltage)
+{
+    guint8 buffer[16];
+
+    if(led_vh==0)
+    {
+        led_vh = 3850;
+    }
+    if(led_vm==0)
+    {
+        led_vm = 3700;
+    }
+    if(led_vl==0)
+    {
+        led_vl = 3600;
+    }
+    if(startup_voltage==0)
+    {
+        startup_voltage = 3400;
+    }
+    if(charger_voltage==0)
+    {
+        charger_voltage = 4500;
+    }
+    if(shutdown_voltage==0)
+    {
+        shutdown_voltage = 3450;
+    }
+    if(led_work_vl==0)
+    {
+        led_work_vl = 3600;
+    }
+    if(charger_fast_voltage==0)
+    {
+        charger_fast_voltage = 4700;
+    }
+
+    buffer[0] = led_vh & 0xFF;
+    buffer[1] = (led_vh >> 8) & 0xFF;
+    buffer[2] = led_vm & 0xFF;
+    buffer[3] = (led_vm >> 8) & 0xFF;
+    buffer[4] = led_vl & 0xFF;
+    buffer[5] = (led_vl >> 8) & 0xFF;
+    buffer[6] = startup_voltage & 0xFF;
+    buffer[7] = (startup_voltage >> 8) & 0xFF;
+    buffer[8] = charger_voltage & 0xFF;
+    buffer[9] = (charger_voltage >> 8) & 0xFF;
+    buffer[10] = shutdown_voltage & 0xFF;
+    buffer[11] = (shutdown_voltage >> 8) & 0xFF;
+    buffer[12] = led_work_vl & 0xFF;
+    buffer[13] = (led_work_vl >> 8) & 0xFF;
+    buffer[14] = charger_fast_voltage & 0xFF;
+    buffer[15] = (charger_fast_voltage >> 8) & 0xFF;
+
+    pcat_pmu_serial_write_data_request(pmu_data,
+        PCAT_PMU_MANAGER_COMMAND_VOLTAGE_THRESHOLD_SET, FALSE, 0,
+        buffer, 16, TRUE);
+}
+
 static void pcat_pmu_serial_status_data_parse(PCatPMUManagerData *pmu_data,
     const guint8 *data, guint len)
 {
@@ -553,6 +619,14 @@ static void pcat_pmu_serial_status_data_parse(PCatPMUManagerData *pmu_data,
 
             tv.tv_sec = pmu_unix_time;
             settimeofday(&tv, NULL);
+
+            g_message("Read system time from PMU: %d-%d-%d %02d:%02d:%02d",
+                y, m, d, h, min, s);
+        }
+        else
+        {
+            g_warning("Invalid system time from PMU: %d-%d-%d %02d:%02d:%02d",
+                y, m, d, h, min, s);
         }
 
         pmu_data->system_time_set_flag = TRUE;
@@ -1058,6 +1132,7 @@ static void pcat_pmu_serial_close(PCatPMUManagerData *pmu_data)
 static gboolean pcat_pmu_manager_check_timeout_func(gpointer user_data)
 {
     PCatPMUManagerData *pmu_data = (PCatPMUManagerData *)user_data;
+    const PCatManagerMainConfigData *config_data;
     const PCatManagerUserConfigData *uconfig_data;
     const PCatManagerPowerScheduleData *sdata;
     guint i;
@@ -1065,6 +1140,8 @@ static gboolean pcat_pmu_manager_check_timeout_func(gpointer user_data)
     gboolean need_action = FALSE;
     guint dow;
     gint64 now;
+    PCatModemManagerDeviceType modem_device_type;
+    guint shutdown_voltage = 0;
 
     if(pmu_data->serial_channel==NULL)
     {
@@ -1188,6 +1265,39 @@ static gboolean pcat_pmu_manager_check_timeout_func(gpointer user_data)
         }
     }
 
+    config_data = pcat_main_config_data_get();
+
+    modem_device_type = pcat_modem_manager_device_type_get();
+    if(pmu_data->modem_device_type!=modem_device_type)
+    {
+        switch(modem_device_type)
+        {
+            case PCAT_MODEM_MANAGER_DEVICE_5G:
+            {
+                shutdown_voltage = config_data->pm_auto_shutdown_voltage_5g;
+                break;
+            }
+            case PCAT_MODEM_MANAGER_DEVICE_GENERAL:
+            {
+                shutdown_voltage = config_data->pm_auto_shutdown_voltage_lte;
+                break;
+            }
+            default:
+            {
+                shutdown_voltage =
+                    config_data->pm_auto_shutdown_voltage_general;
+                break;
+            }
+        }
+
+        pmu_data->modem_device_type = modem_device_type;
+        pcat_pmu_manager_voltage_threshold_set_interval(pmu_data,
+            0, 0, 0, 0, 0, shutdown_voltage, 0, 0);
+
+        g_message("Detected modem type %u, set shutdown voltage to %u.",
+            modem_device_type, shutdown_voltage);
+    }
+
     if(pmu_data->serial_write_source==0 &&
        pmu_data->serial_write_current_command_data==NULL &&
        !g_queue_is_empty(pmu_data->serial_write_command_queue))
@@ -1213,6 +1323,7 @@ static gboolean pcat_pmu_manager_check_timeout_func(gpointer user_data)
 
 gboolean pcat_pmu_manager_init()
 {
+    const PCatManagerMainConfigData *config_data;
     const PCatManagerUserConfigData *uconfig_data;
 
     if(g_pcat_pmu_manager_data.initialized)
@@ -1244,10 +1355,14 @@ gboolean pcat_pmu_manager_init()
     pcat_pmu_manager_schedule_time_update_internal(&g_pcat_pmu_manager_data);
     pcat_pmu_manager_date_time_sync(&g_pcat_pmu_manager_data);
 
+    config_data = pcat_main_config_data_get();
     uconfig_data = pcat_main_user_config_data_get();
 
     pcat_pmu_manager_charger_on_auto_start_internal(&g_pcat_pmu_manager_data,
         uconfig_data->charger_on_auto_start);
+
+    pcat_pmu_manager_voltage_threshold_set_interval(&g_pcat_pmu_manager_data,
+        0, 0, 0, 0, 0, config_data->pm_auto_shutdown_voltage_general, 0, 0);
 
     pcat_pmu_manager_pmu_fw_version_get_internal(&g_pcat_pmu_manager_data);
 
@@ -1396,3 +1511,18 @@ gint64 pcat_pmu_manager_charger_on_auto_start_last_timestamp_get()
 {
     return g_pcat_pmu_manager_data.charger_on_auto_start_last_timestamp;
 }
+
+void pcat_pmu_manager_voltage_threshold_set(guint led_vh, guint led_vm,
+    guint led_vl, guint startup_voltage, guint charger_voltage,
+    guint shutdown_voltage, guint led_work_vl, guint charger_fast_voltage)
+{
+    if(!g_pcat_pmu_manager_data.initialized)
+    {
+        return;
+    }
+
+    pcat_pmu_manager_voltage_threshold_set_interval(&g_pcat_pmu_manager_data,
+        led_vh, led_vm, led_vl, startup_voltage, charger_voltage,
+        shutdown_voltage, led_work_vl, charger_fast_voltage);
+}
+
