@@ -920,6 +920,9 @@ static void pcat_pmu_serial_read_data_parse(PCatPMUManagerData *pmu_data)
                             g_strndup((const gchar *)extra_data,
                             extra_data_len);
 
+                        g_message("PMU FW Version: %s",
+                            pmu_data->pmu_fw_version);
+
                         break;
                     }
                     case PCAT_PMU_MANAGER_COMMAND_POWER_ON_EVENT_GET_ACK:
