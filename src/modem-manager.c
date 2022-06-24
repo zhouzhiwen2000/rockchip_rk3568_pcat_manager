@@ -18,13 +18,6 @@ typedef enum
     PCAT_MODEM_MANAGER_STATE_READY
 }PCatModemManagerState;
 
-typedef enum
-{
-    PCAT_MODEM_MANAGER_DEVICE_ALL,
-    PCAT_MODEM_MANAGER_DEVICE_LTE,
-    PCAT_MODEM_MANAGER_DEVICE_5G
-}PCatModemManagerDeviceType;
-
 typedef struct _PCatModemManagerUSBData
 {
     PCatModemManagerDeviceType device_type;
@@ -63,12 +56,20 @@ typedef struct _PCatModemManagerData
     GString *external_control_exec_stdout_buffer;
 
     FILE *external_control_exec_stdout_log_file;
+    PCatModemManagerDeviceType device_type;
 }PCatModemManagerData;
 
-static PCatModemManagerUSBData g_pcat_modem_manager_supported_5g_list[] =
+static PCatModemManagerUSBData g_pcat_modem_manager_supported_dev_list[] =
 {
     {
-        .device_type = PCAT_MODEM_MANAGER_DEVICE_ALL,
+        .device_type = PCAT_MODEM_MANAGER_DEVICE_5G,
+        .id_vendor = 0x2C7C,
+        .id_product = 0x900,
+        .external_control_exec = "quectel-cm",
+        .external_control_exec_is_daemon = FALSE
+    },
+    {
+        .device_type = PCAT_MODEM_MANAGER_DEVICE_GENERAL,
         .id_vendor = 0x2C7C,
         .id_product = 0,
         .external_control_exec = "quectel-cm",
@@ -624,6 +625,7 @@ static void pcat_modem_manager_scan_usb_devs(PCatModemManagerData *mm_data)
     const PCatModemManagerUSBData *usb_data;
     guint uc;
     gboolean detected;
+    PCatModemManagerDeviceType device_type = PCAT_MODEM_MANAGER_DEVICE_NONE;
 
     cnt = libusb_get_device_list(NULL, &devs);
     if(cnt < 0)
@@ -644,16 +646,17 @@ static void pcat_modem_manager_scan_usb_devs(PCatModemManagerData *mm_data)
             continue;
         }
 
-        for(uc=0;uc < sizeof(g_pcat_modem_manager_supported_5g_list) /
+        for(uc=0;uc < sizeof(g_pcat_modem_manager_supported_dev_list) /
             sizeof(PCatModemManagerUSBData);uc++)
         {
-            usb_data = &(g_pcat_modem_manager_supported_5g_list[uc]);
+            usb_data = &(g_pcat_modem_manager_supported_dev_list[uc]);
 
             if(usb_data->id_vendor==desc.idVendor &&
                (usb_data->id_product==0 ||
                 usb_data->id_product==desc.idProduct))
             {
                 detected = TRUE;
+                device_type = usb_data->device_type;
                 break;
             }
         }
@@ -669,11 +672,7 @@ static void pcat_modem_manager_scan_usb_devs(PCatModemManagerData *mm_data)
             {
                 break;
             }
-            case PCAT_MODEM_MANAGER_DEVICE_LTE:
-            {
-                break;
-            }
-            case PCAT_MODEM_MANAGER_DEVICE_ALL:
+            case PCAT_MODEM_MANAGER_DEVICE_GENERAL:
             {
                 break;
             }
@@ -696,6 +695,8 @@ static void pcat_modem_manager_scan_usb_devs(PCatModemManagerData *mm_data)
     }
 
     libusb_free_device_list(devs, 1);
+
+    mm_data->device_type = device_type;
 }
 
 static gpointer pcat_modem_manager_modem_work_thread_func(
@@ -941,3 +942,7 @@ gboolean pcat_modem_manager_status_get(PCatModemManagerMode *mode,
     return TRUE;
 }
 
+PCatModemManagerDeviceType pcat_modem_manager_device_type_get()
+{
+    return g_pcat_modem_manager_data.device_type;
+}

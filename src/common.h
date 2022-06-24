@@ -45,6 +45,9 @@ typedef struct _PCatManagerMainConfigData
 
     gchar *pm_serial_device;
     guint pm_serial_baud;
+    guint pm_auto_shutdown_voltage_general;
+    guint pm_auto_shutdown_voltage_lte;
+    guint pm_auto_shutdown_voltage_5g;
 
     gboolean debug_modem_external_exec_stdout_log;
     gboolean debug_output_log;

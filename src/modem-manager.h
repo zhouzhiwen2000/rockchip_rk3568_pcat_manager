@@ -14,6 +14,13 @@ typedef enum
     PCAT_MODEM_MANAGER_MODE_5G
 }PCatModemManagerMode;
 
+typedef enum
+{
+    PCAT_MODEM_MANAGER_DEVICE_NONE,
+    PCAT_MODEM_MANAGER_DEVICE_GENERAL,
+    PCAT_MODEM_MANAGER_DEVICE_5G
+}PCatModemManagerDeviceType;
+
 typedef enum {
     PCAT_MODEM_MANAGER_SIM_STATE_ABSENT = 0,
     PCAT_MODEM_MANAGER_SIM_STATE_NOT_READY = 1,
@@ -29,6 +36,7 @@ void pcat_modem_manager_uninit();
 gboolean pcat_modem_manager_status_get(PCatModemManagerMode *mode,
     PCatModemManagerSIMState *sim_state, gint *signal_strength,
     gchar **isp_name, gchar **isp_plmn);
+PCatModemManagerDeviceType pcat_modem_manager_device_type_get();
 
 G_END_DECLS
 

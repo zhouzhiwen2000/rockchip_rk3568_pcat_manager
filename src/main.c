@@ -177,6 +177,39 @@ static gboolean pcat_main_config_data_load()
         "SerialBaud", NULL);
     g_pcat_main_config_data.pm_serial_baud = ivalue;
 
+    ivalue = g_key_file_get_integer(keyfile, "PowerManager",
+        "AutoShutdownVoltageGeneral", NULL);
+    if(ivalue >= 3000 && ivalue < 3700)
+    {
+        g_pcat_main_config_data.pm_auto_shutdown_voltage_general = ivalue;
+    }
+    else
+    {
+        g_pcat_main_config_data.pm_auto_shutdown_voltage_general = 0;
+    }
+
+    ivalue = g_key_file_get_integer(keyfile, "PowerManager",
+        "AutoShutdownVoltageLTE", NULL);
+    if(ivalue >= 3000 && ivalue < 3700)
+    {
+        g_pcat_main_config_data.pm_auto_shutdown_voltage_lte = ivalue;
+    }
+    else
+    {
+        g_pcat_main_config_data.pm_auto_shutdown_voltage_lte = 0;
+    }
+
+    ivalue = g_key_file_get_integer(keyfile, "PowerManager",
+        "AutoShutdownVoltage5G", NULL);
+    if(ivalue >= 3000 && ivalue < 3700)
+    {
+        g_pcat_main_config_data.pm_auto_shutdown_voltage_5g = ivalue;
+    }
+    else
+    {
+        g_pcat_main_config_data.pm_auto_shutdown_voltage_5g = 0;
+    }
+
     ivalue = g_key_file_get_integer(keyfile, "Debug",
         "ModemExternalExecStdoutLog", NULL);
     g_pcat_main_config_data.debug_modem_external_exec_stdout_log =
