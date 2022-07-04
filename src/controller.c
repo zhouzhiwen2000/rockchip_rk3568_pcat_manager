@@ -421,12 +421,14 @@ static void pcat_controller_command_pmu_status_func(
 {
     struct json_object *rroot, *child;
     guint battery_voltage = 0, charger_voltage = 0, battery_percentage = 0;
+    guint board_temp;
     gboolean on_battery = FALSE;
 
     rroot = json_object_new_object();
 
     pcat_pmu_manager_pmu_status_get(&battery_voltage, &charger_voltage,
         &on_battery, &battery_percentage);
+    board_temp = pcat_pmu_manager_board_temp_get();
 
     child = json_object_new_string(command);
     json_object_object_add(rroot, "command", child);
@@ -445,6 +447,9 @@ static void pcat_controller_command_pmu_status_func(
 
     child = json_object_new_int(battery_percentage);
     json_object_object_add(rroot, "charge-percentage", child);
+
+    child = json_object_new_int(board_temp);
+    json_object_object_add(rroot, "board-temperature", child);
 
     pcat_controller_unix_socket_output_json_push(ctrl_data, connection_data,
         rroot);

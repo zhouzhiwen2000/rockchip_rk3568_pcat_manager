@@ -92,6 +92,7 @@ typedef struct _PCatPMUManagerData
 
     guint power_on_event;
     PCatModemManagerDeviceType modem_device_type;
+    gint board_temp;
 }PCatPMUManagerData;
 
 static PCatPMUManagerData g_pcat_pmu_manager_data = {0};
@@ -567,6 +568,7 @@ static void pcat_pmu_serial_status_data_parse(PCatPMUManagerData *pmu_data,
     gdouble battery_percentage;
     gboolean on_battery;
     struct timeval tv;
+    guint8 board_temp = 0;
 
     if(len < 16)
     {
@@ -583,6 +585,11 @@ static void pcat_pmu_serial_status_data_parse(PCatPMUManagerData *pmu_data,
     h = data[12];
     min = data[13];
     s = data[14];
+
+    if(len >= 18)
+    {
+        board_temp = data[17];
+    }
 
     if(pmu_data->system_time_set_flag)
     {
@@ -718,6 +725,8 @@ static void pcat_pmu_serial_status_data_parse(PCatPMUManagerData *pmu_data,
     pmu_data->last_charger_voltage = charger_voltage;
     pmu_data->last_on_battery_state = on_battery;
     pmu_data->last_battery_percentage = battery_percentage * 100;
+    pmu_data->board_temp = board_temp;
+    pmu_data->board_temp -= 40;
 
     fp = fopen(PCAT_PMU_MANAGER_STATEFS_BATTERY_PATH"/ChargePercentage", "w");
     if(fp!=NULL)
@@ -1529,3 +1538,7 @@ void pcat_pmu_manager_voltage_threshold_set(guint led_vh, guint led_vm,
         shutdown_voltage, led_work_vl, charger_fast_voltage);
 }
 
+gint pcat_pmu_manager_board_temp_get()
+{
+    return g_pcat_pmu_manager_data.board_temp;
+}
