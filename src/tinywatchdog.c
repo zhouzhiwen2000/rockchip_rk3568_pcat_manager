@@ -58,6 +58,7 @@ int main(int argc, char *argv[])
         }
     }
 
+    /* daemon(1, 1); */
 
     fd = open(serial_device, O_RDWR | O_NOCTTY);
     if(fd < 0)

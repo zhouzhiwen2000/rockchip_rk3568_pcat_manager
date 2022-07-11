@@ -43,6 +43,10 @@ typedef struct _PCatManagerMainConfigData
     guint hw_gpio_modem_reset_line;
     gboolean hw_gpio_modem_reset_active_low;
 
+    guint hw_battery_discharge_table_normal[11];
+    guint hw_battery_discharge_table_5g[11];
+    guint hw_battery_charge_table[11];
+
     gchar *pm_serial_device;
     guint pm_serial_baud;
     guint pm_auto_shutdown_voltage_general;

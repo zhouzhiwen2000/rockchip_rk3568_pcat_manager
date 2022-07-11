@@ -101,6 +101,9 @@ static gboolean pcat_main_config_data_load()
     GKeyFile *keyfile;
     GError *error = NULL;
     gint ivalue;
+    gint *ivlist;
+    gsize ivlist_size;
+    guint i;
 
     g_pcat_main_config_data.valid = FALSE;
 
@@ -165,6 +168,61 @@ static gboolean pcat_main_config_data_load()
         "GPIOModemResetActiveLow", NULL);
     g_pcat_main_config_data.hw_gpio_modem_reset_active_low =
         (ivalue!=0);
+
+    memset(g_pcat_main_config_data.hw_battery_discharge_table_normal, 0,
+        sizeof(guint) * 11);
+    memset(g_pcat_main_config_data.hw_battery_discharge_table_5g, 0,
+        sizeof(guint) * 11);
+    memset(g_pcat_main_config_data.hw_battery_charge_table, 0,
+        sizeof(guint) * 11);
+
+    ivlist = g_key_file_get_integer_list(keyfile, "Hardware",
+        "BatteryDischargeTableNormal", &ivlist_size, NULL);
+    if(ivlist!=NULL)
+    {
+        if(ivlist_size >= 11)
+        {
+            for(i=0;i<11;i++)
+            {
+                g_pcat_main_config_data.hw_battery_discharge_table_normal[i] =
+                    ivlist[i];
+            }
+        }
+
+        g_free(ivlist);
+    }
+
+    ivlist = g_key_file_get_integer_list(keyfile, "Hardware",
+        "BatteryDischargeTable5G", &ivlist_size, NULL);
+    if(ivlist!=NULL)
+    {
+        if(ivlist_size >= 11)
+        {
+            for(i=0;i<11;i++)
+            {
+                g_pcat_main_config_data.hw_battery_discharge_table_5g[i] =
+                    ivlist[i];
+            }
+        }
+
+        g_free(ivlist);
+    }
+
+    ivlist = g_key_file_get_integer_list(keyfile, "Hardware",
+        "BatteryChargeTable", &ivlist_size, NULL);
+    if(ivlist!=NULL)
+    {
+        if(ivlist_size >= 11)
+        {
+            for(i=0;i<11;i++)
+            {
+                g_pcat_main_config_data.hw_battery_charge_table[i] =
+                    ivlist[i];
+            }
+        }
+
+        g_free(ivlist);
+    }
 
     if(g_pcat_main_config_data.pm_serial_device!=NULL)
     {
