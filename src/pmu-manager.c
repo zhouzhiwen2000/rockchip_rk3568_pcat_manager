@@ -684,7 +684,7 @@ static void pcat_pmu_serial_status_data_parse(PCatPMUManagerData *pmu_data,
                 {
                     battery_percentage = (90.0f - 10 * i) +
                         ((gdouble)battery_voltage -
-                         pmu_data->battery_charge_table[i+1]) * 100 /
+                         pmu_data->battery_charge_table[i+1]) * 10 /
                         (pmu_data->battery_charge_table[i] -
                          pmu_data->battery_charge_table[i+1]);
 
@@ -714,7 +714,7 @@ static void pcat_pmu_serial_status_data_parse(PCatPMUManagerData *pmu_data,
                 {
                     battery_percentage = (90.0f - 10 * i) +
                         ((gdouble)battery_voltage -
-                         pmu_data->battery_discharge_table_5g[i+1]) * 100 /
+                         pmu_data->battery_discharge_table_5g[i+1]) * 10 /
                         (pmu_data->battery_discharge_table_5g[i] -
                          pmu_data->battery_discharge_table_5g[i+1]);
 
@@ -744,7 +744,7 @@ static void pcat_pmu_serial_status_data_parse(PCatPMUManagerData *pmu_data,
                 {
                     battery_percentage = (90.0f - 10 * i) +
                         ((gdouble)battery_voltage -
-                         pmu_data->battery_discharge_table_normal[i+1]) * 100 /
+                         pmu_data->battery_discharge_table_normal[i+1]) * 10 /
                         (pmu_data->battery_discharge_table_normal[i] -
                          pmu_data->battery_discharge_table_normal[i+1]);
 
