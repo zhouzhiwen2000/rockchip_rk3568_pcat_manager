@@ -131,8 +131,8 @@ int main(int argc, char *argv[])
 
     while(1)
     {
-        buffer[4] = frame_num & 0xFF;
-        buffer[5] = (frame_num >> 8) & 0xFF;
+        buffer[3] = frame_num & 0xFF;
+        buffer[4] = (frame_num >> 8) & 0xFF;
         frame_num++;
 
         crc = compute_crc16(buffer + 1, 9);

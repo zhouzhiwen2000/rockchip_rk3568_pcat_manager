@@ -521,7 +521,7 @@ static void pcat_pmu_manager_voltage_threshold_set_interval(
     guint led_vl, guint startup_voltage, guint charger_voltage,
     guint shutdown_voltage, guint led_work_vl, guint charger_fast_voltage)
 {
-    guint8 buffer[16];
+    guint8 buffer[18];
 
     if(led_vh==0)
     {
@@ -573,9 +573,12 @@ static void pcat_pmu_manager_voltage_threshold_set_interval(
     buffer[14] = charger_fast_voltage & 0xFF;
     buffer[15] = (charger_fast_voltage >> 8) & 0xFF;
 
+    buffer[16] = 4160 & 0xFF;
+    buffer[17] = (4160 >> 8) & 0xFF;
+
     pcat_pmu_serial_write_data_request(pmu_data,
         PCAT_PMU_MANAGER_COMMAND_VOLTAGE_THRESHOLD_SET, FALSE, 0,
-        buffer, 16, TRUE);
+        buffer, 18, TRUE);
 }
 
 static void pcat_pmu_serial_status_data_parse(PCatPMUManagerData *pmu_data,

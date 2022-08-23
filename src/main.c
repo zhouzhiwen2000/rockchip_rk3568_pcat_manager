@@ -12,7 +12,8 @@
 #include "pmu-manager.h"
 #include "controller.h"
 
-#define PCAT_MAIN_MWAN_STATUS_CHECK_TIMEOUT 120
+#define PCAT_MAIN_MWAN_STATUS_CHECK_TIMEOUT 30
+#define PCAT_MAIN_MWAN_STATUS_CHECK_BOOT_WAIT 120
 
 #define PCAT_MAIN_CONFIG_FILE "/etc/pcat-manager.conf"
 #define PCAT_MAIN_USER_CONFIG_FILE "/etc/pcat-manager-userdata.conf"
@@ -591,6 +592,18 @@ static void *pcat_main_mwan_policy_check_thread_func(void *user_data)
     gint64 mwan3_interface_check_timestamp;
 
     mwan3_interface_check_timestamp = g_get_monotonic_time();
+
+    i = 0;
+    while(g_pcat_main_mwan_route_check_flag)
+    {
+        if(i > PCAT_MAIN_MWAN_STATUS_CHECK_BOOT_WAIT * 10)
+        {
+            break;
+        }
+
+        i++;
+        g_usleep(100000);
+    }
 
     while(g_pcat_main_mwan_route_check_flag)
     {
