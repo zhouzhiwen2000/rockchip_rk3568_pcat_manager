@@ -758,16 +758,25 @@ static gpointer pcat_modem_manager_modem_work_thread_func(
 
     if(mm_data->gpio_modem_reset_line!=NULL)
     {
+        gpiod_line_set_value(mm_data->gpio_modem_reset_line,
+            main_config_data->hw_gpio_modem_reset_active_low ? 0 : 1);
+
         gpiod_line_release(mm_data->gpio_modem_reset_line);
         mm_data->gpio_modem_reset_line = NULL;
     }
     if(mm_data->gpio_modem_rf_kill_line!=NULL)
     {
+        gpiod_line_set_value(mm_data->gpio_modem_rf_kill_line,
+            main_config_data->hw_gpio_modem_rf_kill_active_low ? 0 : 1);
+
         gpiod_line_release(mm_data->gpio_modem_rf_kill_line);
         mm_data->gpio_modem_rf_kill_line = NULL;
     }
     if(mm_data->gpio_modem_power_line!=NULL)
     {
+        gpiod_line_set_value(mm_data->gpio_modem_power_line,
+            main_config_data->hw_gpio_modem_power_active_low ? 1 : 0);
+
         gpiod_line_release(mm_data->gpio_modem_power_line);
         mm_data->gpio_modem_power_line = NULL;
     }
