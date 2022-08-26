@@ -733,7 +733,10 @@ static gpointer pcat_modem_manager_modem_work_thread_func(
 
             case PCAT_MODEM_MANAGER_STATE_READY:
             {
-                pcat_modem_manager_scan_usb_devs(mm_data);
+                if(!pcat_main_is_running_on_distro())
+                {
+                    pcat_modem_manager_scan_usb_devs(mm_data);
+                }
 
                 g_usleep(1000000); /* WIP */
 

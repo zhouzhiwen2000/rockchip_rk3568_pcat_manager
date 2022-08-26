@@ -85,6 +85,7 @@ PCatManagerUserConfigData *pcat_main_user_config_data_get();
 void pcat_main_user_config_data_sync();
 void pcat_main_request_shutdown(gboolean send_pmu_request);
 PCatManagerRouteMode pcat_main_network_route_mode_get();
+gboolean pcat_main_is_running_on_distro();
 
 G_END_DECLS
 

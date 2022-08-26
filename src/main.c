@@ -57,6 +57,7 @@ const PCatManagerRouteMode g_pcat_main_iface_route_mode[
 static const guint g_pcat_main_shutdown_wait_max = 30;
 
 static gboolean g_pcat_main_cmd_daemonsize = FALSE;
+static gboolean g_pcat_main_cmd_distro = FALSE;
 
 static GMainLoop *g_pcat_main_loop = NULL;
 static gboolean g_pcat_main_shutdown = FALSE;
@@ -86,6 +87,8 @@ static GOptionEntry g_pcat_cmd_entries[] =
 {
     { "daemon", 'D', 0, G_OPTION_ARG_NONE, &g_pcat_main_cmd_daemonsize,
         "Run as a daemon", NULL },
+    { "distro", 0, 0, G_OPTION_ARG_NONE, &g_pcat_main_cmd_distro,
+        "Run this program on normal Linux distros (not OpenWRT)", NULL },
     { NULL, 0, 0, G_OPTION_ARG_NONE, NULL, NULL, NULL }
 };
 
@@ -1197,30 +1200,33 @@ int main(int argc, char *argv[])
             "communicate with other processes.");
     }
 
-    if(pthread_create(&mwan_policy_check_thread, NULL,
-        pcat_main_mwan_policy_check_thread_func, NULL)!=0)
+    if(!g_pcat_main_cmd_distro)
     {
-        g_warning("Failed to create MWAN policy check thread, routing "
-            "check will not work!");
-    }
-    else
-    {
-        pthread_detach(mwan_policy_check_thread);
-    }
+        if(pthread_create(&mwan_policy_check_thread, NULL,
+            pcat_main_mwan_policy_check_thread_func, NULL)!=0)
+        {
+            g_warning("Failed to create MWAN policy check thread, routing "
+                "check will not work!");
+        }
+        else
+        {
+            pthread_detach(mwan_policy_check_thread);
+        }
 
-    if(pthread_create(&connection_check_thread, NULL,
-        pcat_main_connection_check_thread_func, NULL)!=0)
-    {
-        g_warning("Failed to create connection check thread, routing "
-            "check may not work correctly!");
-    }
-    else
-    {
-        pthread_detach(connection_check_thread);
-    }
+        if(pthread_create(&connection_check_thread, NULL,
+            pcat_main_connection_check_thread_func, NULL)!=0)
+        {
+            g_warning("Failed to create connection check thread, routing "
+                "check may not work correctly!");
+        }
+        else
+        {
+            pthread_detach(connection_check_thread);
+        }
 
-    g_pcat_main_status_check_timeout_id =
-        g_timeout_add_seconds(2, pcat_main_status_check_timeout_func, NULL);
+        g_pcat_main_status_check_timeout_id =
+            g_timeout_add_seconds(2, pcat_main_status_check_timeout_func, NULL);
+    }
 
     g_main_loop_run(g_pcat_main_loop);
 
@@ -1276,4 +1282,9 @@ void pcat_main_user_config_data_sync()
 PCatManagerRouteMode pcat_main_network_route_mode_get()
 {
     return g_pcat_main_network_route_mode;
+}
+
+gboolean pcat_main_is_running_on_distro()
+{
+    return g_pcat_main_cmd_distro;
 }
