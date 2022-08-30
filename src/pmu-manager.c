@@ -522,39 +522,45 @@ static void pcat_pmu_manager_voltage_threshold_set_interval(
     guint shutdown_voltage, guint led_work_vl, guint charger_fast_voltage)
 {
     guint8 buffer[18];
+    const PCatManagerMainConfigData *main_config_data;
+    guint battery_full_threshold;
+
+    main_config_data = pcat_main_config_data_get();
 
     if(led_vh==0)
     {
-        led_vh = 3850;
+        led_vh = main_config_data->pm_led_high_voltage;
     }
     if(led_vm==0)
     {
-        led_vm = 3700;
+        led_vm = main_config_data->pm_led_medium_voltage;
     }
     if(led_vl==0)
     {
-        led_vl = 3600;
+        led_vl = main_config_data->pm_led_low_voltage;;
     }
     if(startup_voltage==0)
     {
-        startup_voltage = 3400;
+        startup_voltage = main_config_data->pm_startup_voltage;
     }
     if(charger_voltage==0)
     {
-        charger_voltage = 4500;
+        charger_voltage = main_config_data->pm_charger_limit_voltage;
     }
     if(shutdown_voltage==0)
     {
-        shutdown_voltage = 3450;
+        shutdown_voltage = main_config_data->pm_auto_shutdown_voltage_general;
     }
     if(led_work_vl==0)
     {
-        led_work_vl = 3600;
+        led_work_vl = main_config_data->pm_led_work_low_voltage;
     }
     if(charger_fast_voltage==0)
     {
-        charger_fast_voltage = 4700;
+        charger_fast_voltage = main_config_data->pm_charger_fast_voltage;
     }
+
+    battery_full_threshold = main_config_data->pm_battery_full_threshold;
 
     buffer[0] = led_vh & 0xFF;
     buffer[1] = (led_vh >> 8) & 0xFF;
@@ -573,8 +579,8 @@ static void pcat_pmu_manager_voltage_threshold_set_interval(
     buffer[14] = charger_fast_voltage & 0xFF;
     buffer[15] = (charger_fast_voltage >> 8) & 0xFF;
 
-    buffer[16] = 4160 & 0xFF;
-    buffer[17] = (4160 >> 8) & 0xFF;
+    buffer[16] = battery_full_threshold & 0xFF;
+    buffer[17] = (battery_full_threshold >> 8) & 0xFF;
 
     pcat_pmu_serial_write_data_request(pmu_data,
         PCAT_PMU_MANAGER_COMMAND_VOLTAGE_THRESHOLD_SET, FALSE, 0,
@@ -1415,62 +1421,62 @@ gboolean pcat_pmu_manager_init()
     config_data = pcat_main_config_data_get();
 
     valid = TRUE;
-    tmp = config_data->hw_battery_discharge_table_normal[0];
+    tmp = config_data->pm_battery_discharge_table_normal[0];
     for(i=1;i<11;i++)
     {
-        if(tmp <= config_data->hw_battery_discharge_table_normal[i])
+        if(tmp <= config_data->pm_battery_discharge_table_normal[i])
         {
             valid = FALSE;
             break;
         }
-        tmp = config_data->hw_battery_discharge_table_normal[i];
+        tmp = config_data->pm_battery_discharge_table_normal[i];
     }
     if(valid)
     {
         for(i=0;i<11;i++)
         {
             g_pcat_pmu_manager_data.battery_discharge_table_normal[i] =
-                config_data->hw_battery_discharge_table_normal[i];
+                config_data->pm_battery_discharge_table_normal[i];
         }
     }
 
     valid = TRUE;
-    tmp = config_data->hw_battery_discharge_table_5g[0];
+    tmp = config_data->pm_battery_discharge_table_5g[0];
     for(i=1;i<11;i++)
     {
-        if(tmp <= config_data->hw_battery_discharge_table_5g[i])
+        if(tmp <= config_data->pm_battery_discharge_table_5g[i])
         {
             valid = FALSE;
             break;
         }
-        tmp = config_data->hw_battery_discharge_table_5g[i];
+        tmp = config_data->pm_battery_discharge_table_5g[i];
     }
     if(valid)
     {
         for(i=0;i<11;i++)
         {
             g_pcat_pmu_manager_data.battery_discharge_table_5g[i] =
-                config_data->hw_battery_discharge_table_5g[i];
+                config_data->pm_battery_discharge_table_5g[i];
         }
     }
 
     valid = TRUE;
-    tmp = config_data->hw_battery_charge_table[0];
+    tmp = config_data->pm_battery_charge_table[0];
     for(i=1;i<11;i++)
     {
-        if(tmp <= config_data->hw_battery_charge_table[i])
+        if(tmp <= config_data->pm_battery_charge_table[i])
         {
             valid = FALSE;
             break;
         }
-        tmp = config_data->hw_battery_charge_table[i];
+        tmp = config_data->pm_battery_charge_table[i];
     }
     if(valid)
     {
         for(i=0;i<11;i++)
         {
             g_pcat_pmu_manager_data.battery_charge_table[i] =
-                config_data->hw_battery_charge_table[i];
+                config_data->pm_battery_charge_table[i];
         }
     }
 

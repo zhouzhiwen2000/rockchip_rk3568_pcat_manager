@@ -43,15 +43,24 @@ typedef struct _PCatManagerMainConfigData
     guint hw_gpio_modem_reset_line;
     gboolean hw_gpio_modem_reset_active_low;
 
-    guint hw_battery_discharge_table_normal[11];
-    guint hw_battery_discharge_table_5g[11];
-    guint hw_battery_charge_table[11];
-
     gchar *pm_serial_device;
     guint pm_serial_baud;
     guint pm_auto_shutdown_voltage_general;
     guint pm_auto_shutdown_voltage_lte;
     guint pm_auto_shutdown_voltage_5g;
+
+    guint pm_battery_discharge_table_normal[11];
+    guint pm_battery_discharge_table_5g[11];
+    guint pm_battery_charge_table[11];
+
+    guint pm_led_high_voltage;
+    guint pm_led_medium_voltage;
+    guint pm_led_low_voltage;
+    guint pm_led_work_low_voltage;
+    guint pm_startup_voltage;
+    guint pm_charger_limit_voltage;
+    guint pm_charger_fast_voltage;
+    guint pm_battery_full_threshold;
 
     gboolean debug_modem_external_exec_stdout_log;
     gboolean debug_output_log;

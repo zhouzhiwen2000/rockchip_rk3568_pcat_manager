@@ -173,14 +173,14 @@ static gboolean pcat_main_config_data_load()
     g_pcat_main_config_data.hw_gpio_modem_reset_active_low =
         (ivalue!=0);
 
-    memset(g_pcat_main_config_data.hw_battery_discharge_table_normal, 0,
+    memset(g_pcat_main_config_data.pm_battery_discharge_table_normal, 0,
         sizeof(guint) * 11);
-    memset(g_pcat_main_config_data.hw_battery_discharge_table_5g, 0,
+    memset(g_pcat_main_config_data.pm_battery_discharge_table_5g, 0,
         sizeof(guint) * 11);
-    memset(g_pcat_main_config_data.hw_battery_charge_table, 0,
+    memset(g_pcat_main_config_data.pm_battery_charge_table, 0,
         sizeof(guint) * 11);
 
-    ivlist = g_key_file_get_integer_list(keyfile, "Hardware",
+    ivlist = g_key_file_get_integer_list(keyfile, "PowerManager",
         "BatteryDischargeTableNormal", &ivlist_size, NULL);
     if(ivlist!=NULL)
     {
@@ -188,7 +188,7 @@ static gboolean pcat_main_config_data_load()
         {
             for(i=0;i<11;i++)
             {
-                g_pcat_main_config_data.hw_battery_discharge_table_normal[i] =
+                g_pcat_main_config_data.pm_battery_discharge_table_normal[i] =
                     ivlist[i];
             }
         }
@@ -196,7 +196,7 @@ static gboolean pcat_main_config_data_load()
         g_free(ivlist);
     }
 
-    ivlist = g_key_file_get_integer_list(keyfile, "Hardware",
+    ivlist = g_key_file_get_integer_list(keyfile, "PowerManager",
         "BatteryDischargeTable5G", &ivlist_size, NULL);
     if(ivlist!=NULL)
     {
@@ -204,7 +204,7 @@ static gboolean pcat_main_config_data_load()
         {
             for(i=0;i<11;i++)
             {
-                g_pcat_main_config_data.hw_battery_discharge_table_5g[i] =
+                g_pcat_main_config_data.pm_battery_discharge_table_5g[i] =
                     ivlist[i];
             }
         }
@@ -212,7 +212,7 @@ static gboolean pcat_main_config_data_load()
         g_free(ivlist);
     }
 
-    ivlist = g_key_file_get_integer_list(keyfile, "Hardware",
+    ivlist = g_key_file_get_integer_list(keyfile, "PowerManager",
         "BatteryChargeTable", &ivlist_size, NULL);
     if(ivlist!=NULL)
     {
@@ -220,7 +220,7 @@ static gboolean pcat_main_config_data_load()
         {
             for(i=0;i<11;i++)
             {
-                g_pcat_main_config_data.hw_battery_charge_table[i] =
+                g_pcat_main_config_data.pm_battery_charge_table[i] =
                     ivlist[i];
             }
         }
@@ -270,6 +270,94 @@ static gboolean pcat_main_config_data_load()
     else
     {
         g_pcat_main_config_data.pm_auto_shutdown_voltage_5g = 0;
+    }
+
+    ivalue = g_key_file_get_integer(keyfile, "PowerManager",
+        "LEDHighVoltage", NULL);
+    if(ivalue!=0)
+    {
+        g_pcat_main_config_data.pm_led_high_voltage = ivalue;
+    }
+    else
+    {
+        g_pcat_main_config_data.pm_led_high_voltage = 0;
+    }
+
+    ivalue = g_key_file_get_integer(keyfile, "PowerManager",
+        "LEDMediumVoltage", NULL);
+    if(ivalue!=0)
+    {
+        g_pcat_main_config_data.pm_led_medium_voltage = ivalue;
+    }
+    else
+    {
+        g_pcat_main_config_data.pm_led_medium_voltage = 0;
+    }
+
+    ivalue = g_key_file_get_integer(keyfile, "PowerManager",
+        "LEDLowVoltage", NULL);
+    if(ivalue!=0)
+    {
+        g_pcat_main_config_data.pm_led_low_voltage = ivalue;
+    }
+    else
+    {
+        g_pcat_main_config_data.pm_led_low_voltage = 0;
+    }
+
+    ivalue = g_key_file_get_integer(keyfile, "PowerManager",
+        "LEDWorkLowVoltage", NULL);
+    if(ivalue!=0)
+    {
+        g_pcat_main_config_data.pm_led_work_low_voltage = ivalue;
+    }
+    else
+    {
+        g_pcat_main_config_data.pm_led_work_low_voltage = 0;
+    }
+
+    ivalue = g_key_file_get_integer(keyfile, "PowerManager",
+        "StartupVoltage", NULL);
+    if(ivalue!=0)
+    {
+        g_pcat_main_config_data.pm_startup_voltage = ivalue;
+    }
+    else
+    {
+        g_pcat_main_config_data.pm_startup_voltage = 0;
+    }
+
+    ivalue = g_key_file_get_integer(keyfile, "PowerManager",
+        "ChargerLimitVoltage", NULL);
+    if(ivalue!=0)
+    {
+        g_pcat_main_config_data.pm_charger_limit_voltage = ivalue;
+    }
+    else
+    {
+        g_pcat_main_config_data.pm_charger_limit_voltage = 0;
+    }
+
+    ivalue = g_key_file_get_integer(keyfile, "PowerManager",
+        "ChargerFastVoltage", NULL);
+    if(ivalue!=0)
+    {
+        g_pcat_main_config_data.pm_charger_fast_voltage = ivalue;
+    }
+    else
+    {
+        g_pcat_main_config_data.pm_charger_fast_voltage = 0;
+    }
+
+    ivalue = g_key_file_get_integer(keyfile, "PowerManager",
+        "BatteryFullThreshold", NULL);
+    if(ivalue!=0)
+    {
+        g_pcat_main_config_data.pm_battery_full_threshold = ivalue;
+    }
+    else
+    {
+        g_pcat_main_config_data.pm_battery_full_threshold = 0;
     }
 
     ivalue = g_key_file_get_integer(keyfile, "Debug",
