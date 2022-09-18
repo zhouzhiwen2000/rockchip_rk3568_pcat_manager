@@ -822,6 +822,9 @@ static void pcat_controller_command_modem_status_get_func(
 
     child = json_object_new_string(isp_plmn!=NULL ? isp_plmn : "");
     json_object_object_add(rroot, "isp-lpmn", child);
+    
+    child = json_object_new_int(signal_strength);
+    json_object_object_add(rroot, "signal-strength", child);
 
     g_free(isp_name);
     g_free(isp_plmn);
