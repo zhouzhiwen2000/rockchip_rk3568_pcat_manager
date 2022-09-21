@@ -36,6 +36,7 @@ typedef struct _PCatModemManagerData
     GThread *modem_work_thread;
     GHashTable *modem_mode_table;
     PCatModemManagerMode modem_mode;
+    gboolean modem_rfkill_state;
     gint modem_signal_strength;
     PCatModemManagerSIMState sim_state;
     gchar *isp_name;
@@ -86,6 +87,8 @@ static inline gboolean pcat_modem_manager_modem_power_init(
     gint ret;
 
     g_message("Start Modem power initialization.");
+
+    mm_data->modem_rfkill_state = FALSE;
 
     if(main_config_data->hw_gpio_modem_power_chip==NULL)
     {
@@ -956,4 +959,35 @@ gboolean pcat_modem_manager_status_get(PCatModemManagerMode *mode,
 PCatModemManagerDeviceType pcat_modem_manager_device_type_get()
 {
     return g_pcat_modem_manager_data.device_type;
+}
+
+void pcat_modem_manager_device_rfkill_mode_set(gboolean state)
+{
+    PCatManagerMainConfigData *main_config_data;
+    gint value;
+
+    if(g_pcat_modem_manager_data.gpio_modem_rf_kill_line==NULL)
+    {
+        return;
+    }
+
+    if(!!g_pcat_modem_manager_data.modem_rfkill_state==!!state)
+    {
+        return;
+    }
+
+    g_pcat_modem_manager_data.modem_rfkill_state = state;
+    main_config_data = pcat_main_config_data_get();
+
+    if(state)
+    {
+        value = main_config_data->hw_gpio_modem_rf_kill_active_low ? 0 : 1;
+    }
+    else
+    {
+        value = main_config_data->hw_gpio_modem_rf_kill_active_low ? 1 : 0;
+    }
+
+    gpiod_line_set_value(g_pcat_modem_manager_data.gpio_modem_rf_kill_line,
+        value);
 }

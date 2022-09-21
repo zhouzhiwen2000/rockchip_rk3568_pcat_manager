@@ -988,6 +988,34 @@ static void pcat_controller_command_pmu_fw_version_get_func(
     json_object_put(rroot);
 }
 
+static void pcat_controller_command_modem_rfkill_mode_set_func(
+    PCatControllerData *ctrl_data,
+    PCatControllerConnectionData *connection_data,
+    const gchar *command, struct json_object *root)
+{
+    struct json_object *rroot, *child;
+    gboolean state = FALSE;
+
+    rroot = json_object_new_object();
+
+    child = json_object_new_string(command);
+    json_object_object_add(rroot, "command", child);
+
+    child = json_object_new_int(0);
+    json_object_object_add(rroot, "code", child);
+
+    if(json_object_object_get_ex(root, "state", &child))
+    {
+        state = (json_object_get_int(child)!=0);
+    }
+
+    pcat_modem_manager_device_rfkill_mode_set(state);
+
+    pcat_controller_unix_socket_output_json_push(ctrl_data, connection_data,
+        rroot);
+    json_object_put(rroot);
+}
+
 static PCatControllerCommandData g_pcat_controller_command_list[] =
 {
     {
@@ -1021,6 +1049,10 @@ static PCatControllerCommandData g_pcat_controller_command_list[] =
     {
         .command = "pmu-fw-version-get",
         .callback = pcat_controller_command_pmu_fw_version_get_func,
+    },
+    {
+        .command = "modem-rfkill-mode-set",
+        .callback = pcat_controller_command_modem_rfkill_mode_set_func,
     },
     { NULL, NULL }
 };
