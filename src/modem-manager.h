@@ -34,8 +34,8 @@ typedef enum {
 gboolean pcat_modem_manager_init();
 void pcat_modem_manager_uninit();
 gboolean pcat_modem_manager_status_get(PCatModemManagerMode *mode,
-    PCatModemManagerSIMState *sim_state, gint *signal_strength,
-    gchar **isp_name, gchar **isp_plmn);
+    PCatModemManagerSIMState *sim_state, gboolean *rfkill_state,
+    gint *signal_strength, gchar **isp_name, gchar **isp_plmn);
 PCatModemManagerDeviceType pcat_modem_manager_device_type_get();
 void pcat_modem_manager_device_rfkill_mode_set(gboolean state);
 

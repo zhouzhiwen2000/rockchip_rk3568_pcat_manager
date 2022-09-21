@@ -910,8 +910,8 @@ void pcat_modem_manager_uninit()
 }
 
 gboolean pcat_modem_manager_status_get(PCatModemManagerMode *mode,
-    PCatModemManagerSIMState *sim_state, gint *signal_strength,
-    gchar **isp_name, gchar **isp_plmn)
+    PCatModemManagerSIMState *sim_state, gboolean *rfkill_state,
+    gint *signal_strength, gchar **isp_name, gchar **isp_plmn)
 {
     if(!g_pcat_modem_manager_data.initialized)
     {
@@ -925,6 +925,10 @@ gboolean pcat_modem_manager_status_get(PCatModemManagerMode *mode,
     if(sim_state!=NULL)
     {
         *sim_state = g_pcat_modem_manager_data.sim_state;
+    }
+    if(rfkill_state!=NULL)
+    {
+        *rfkill_state = g_pcat_modem_manager_data.modem_rfkill_state;
     }
     if(signal_strength!=NULL)
     {

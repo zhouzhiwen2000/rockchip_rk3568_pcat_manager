@@ -726,13 +726,14 @@ static void pcat_controller_command_modem_status_get_func(
     gchar *isp_plmn = NULL;
     gint code = 0;
     const gchar *mode_str = "none", *sim_state_str = "absent";
+    gboolean rfkill_state = FALSE;
 
     rroot = json_object_new_object();
     child = json_object_new_string(command);
     json_object_object_add(rroot, "command", child);
 
-    if(!pcat_modem_manager_status_get(&mode, &sim_state, &signal_strength,
-        &isp_name, &isp_plmn))
+    if(!pcat_modem_manager_status_get(&mode, &sim_state, &rfkill_state,
+        &signal_strength, &isp_name, &isp_plmn))
     {
         code = 1;
     }
@@ -813,6 +814,9 @@ static void pcat_controller_command_modem_status_get_func(
 
     child = json_object_new_string(mode_str);
     json_object_object_add(rroot, "mode", child);
+
+    child = json_object_new_int(rfkill_state ? 1 : 0);
+    json_object_object_add(rroot, "rfkill-state", child);
 
     child = json_object_new_string(sim_state_str);
     json_object_object_add(rroot, "sim-state", child);
