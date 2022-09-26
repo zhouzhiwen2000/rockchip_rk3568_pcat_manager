@@ -797,6 +797,7 @@ gboolean pcat_modem_manager_init()
 {
     int errcode;
     PCatManagerMainConfigData *main_config_data;
+    gchar *command[] = {"/usr/sbin/rfkill", "unblock", "wwan", NULL};
 
     if(g_pcat_modem_manager_data.initialized)
     {
@@ -849,6 +850,9 @@ gboolean pcat_modem_manager_init()
         "pcat-modem-manager-work-thread",
         pcat_modem_manager_modem_work_thread_func,
         &g_pcat_modem_manager_data);
+
+    g_spawn_async(NULL, command, NULL, G_SPAWN_DEFAULT,
+        NULL, NULL, NULL, NULL);
 
     g_pcat_modem_manager_data.initialized = TRUE;
 
@@ -957,7 +961,7 @@ void pcat_modem_manager_device_rfkill_mode_set(gboolean state)
 {
     PCatManagerMainConfigData *main_config_data;
     gint value;
-    gchar *command[] = {"rfkill", "unblock", "wwan", NULL};
+    gchar *command[] = {"/usr/sbin/rfkill", "unblock", "wwan", NULL};
 
     if(!!g_pcat_modem_manager_data.modem_rfkill_state==!!state)
     {
