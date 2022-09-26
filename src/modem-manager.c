@@ -361,13 +361,13 @@ static inline void pcat_modem_manager_external_control_exec_line_parser(
                         {
                             if(sscanf(value_raw_str, "%d", &signal_raw)>0)
                             {
-                                if(signal_raw >= 0)
+                                if(signal_raw >= -65)
                                 {
                                     signal_value = 100;
                                 }
-                                else if(signal_raw >= -100)
+                                else if(signal_raw >= -85)
                                 {
-                                    signal_value = signal_raw + 100;
+                                    signal_value = (signal_raw + 85) * 5;
                                 }
 
                                 break;
