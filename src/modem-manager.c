@@ -715,21 +715,9 @@ static gpointer pcat_modem_manager_modem_work_thread_func(
         {
             case PCAT_MODEM_MANAGER_STATE_NONE:
             {
-                if(pcat_modem_manager_modem_power_init(
-                    mm_data, main_config_data))
-                {
-                    mm_data->state = PCAT_MODEM_MANAGER_STATE_READY;
-                }
-                else
-                {
-                    if(!mm_data->work_flag)
-                    {
-                        break;
-                    }
-
-                    g_warning("Modem power initialization failed!");
-                    g_usleep(2000000);
-                }
+                pcat_modem_manager_modem_power_init(mm_data,
+                    main_config_data);
+                mm_data->state = PCAT_MODEM_MANAGER_STATE_READY;
 
                 break;
             }
@@ -969,11 +957,7 @@ void pcat_modem_manager_device_rfkill_mode_set(gboolean state)
 {
     PCatManagerMainConfigData *main_config_data;
     gint value;
-
-    if(g_pcat_modem_manager_data.gpio_modem_rf_kill_line==NULL)
-    {
-        return;
-    }
+    gchar *command[] = {"rfkill", "unblock", "wwan", NULL};
 
     if(!!g_pcat_modem_manager_data.modem_rfkill_state==!!state)
     {
@@ -985,13 +969,23 @@ void pcat_modem_manager_device_rfkill_mode_set(gboolean state)
 
     if(state)
     {
-        value = main_config_data->hw_gpio_modem_rf_kill_active_low ? 0 : 1;
+        command[1] = "block";
     }
-    else
-    {
-        value = main_config_data->hw_gpio_modem_rf_kill_active_low ? 1 : 0;
-    }
+    g_spawn_async(NULL, command, NULL, G_SPAWN_DEFAULT,
+        NULL, NULL, NULL, NULL);
 
-    gpiod_line_set_value(g_pcat_modem_manager_data.gpio_modem_rf_kill_line,
-        value);
+    if(g_pcat_modem_manager_data.gpio_modem_rf_kill_line!=NULL)
+    {
+        if(state)
+        {
+            value = main_config_data->hw_gpio_modem_rf_kill_active_low ? 0 : 1;
+        }
+        else
+        {
+            value = main_config_data->hw_gpio_modem_rf_kill_active_low ? 1 : 0;
+        }
+
+        gpiod_line_set_value(
+            g_pcat_modem_manager_data.gpio_modem_rf_kill_line, value);
+    }
 }
