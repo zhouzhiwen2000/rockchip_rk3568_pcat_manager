@@ -381,6 +381,7 @@ static gboolean pcat_main_user_config_data_load()
     GKeyFile *keyfile;
     GError *error = NULL;
     gint iv;
+    gchar *sv;
     guint i;
     gchar item_name[32] = {0};
     PCatManagerUserConfigData *uconfig_data =
@@ -460,6 +461,50 @@ static gboolean pcat_main_user_config_data_load()
         g_key_file_get_integer(keyfile, "General",
         "ChargerOnAutoStartTimeout", NULL);
 
+    g_free(uconfig_data->modem_dial_apn);
+    sv = g_key_file_get_string(keyfile, "Modem", "APN", NULL);
+    if(sv!=NULL && *sv!='\0')
+    {
+        uconfig_data->modem_dial_apn = sv;
+    }
+    else
+    {
+        uconfig_data->modem_dial_apn = NULL;
+    }
+
+    g_free(uconfig_data->modem_dial_user);
+    sv = g_key_file_get_string(keyfile, "Modem", "User", NULL);
+    if(sv!=NULL && *sv!='\0')
+    {
+        uconfig_data->modem_dial_user = sv;
+    }
+    else
+    {
+        uconfig_data->modem_dial_user = NULL;
+    }
+
+    g_free(uconfig_data->modem_dial_user);
+    sv = g_key_file_get_string(keyfile, "Modem", "Password", NULL);
+    if(sv!=NULL && *sv!='\0')
+    {
+        uconfig_data->modem_dial_password = sv;
+    }
+    else
+    {
+        uconfig_data->modem_dial_password = NULL;
+    }
+
+    g_free(uconfig_data->modem_dial_auth);
+    sv = g_key_file_get_string(keyfile, "Modem", "Auth", NULL);
+    if(sv!=NULL && *sv!='\0')
+    {
+        uconfig_data->modem_dial_auth = sv;
+    }
+    else
+    {
+        uconfig_data->modem_dial_auth = NULL;
+    }
+
     g_key_file_unref(keyfile);
 
     uconfig_data->valid = TRUE;
@@ -519,6 +564,27 @@ static gboolean pcat_main_user_config_data_save()
         uconfig_data->charger_on_auto_start ? 1 : 0);
     g_key_file_set_integer(keyfile, "General", "ChargerOnAutoStartTimeout",
         uconfig_data->charger_on_auto_start_timeout);
+
+    if(uconfig_data->modem_dial_apn!=NULL)
+    {
+        g_key_file_set_string(keyfile, "Modem", "APN",
+            uconfig_data->modem_dial_apn);
+    }
+    if(uconfig_data->modem_dial_user!=NULL)
+    {
+        g_key_file_set_string(keyfile, "Modem", "User",
+            uconfig_data->modem_dial_user);
+    }
+    if(uconfig_data->modem_dial_password!=NULL)
+    {
+        g_key_file_set_string(keyfile, "Modem", "Password",
+            uconfig_data->modem_dial_password);
+    }
+    if(uconfig_data->modem_dial_auth!=NULL)
+    {
+        g_key_file_set_string(keyfile, "Modem", "Auth",
+            uconfig_data->modem_dial_auth);
+    }
 
     ret = g_key_file_save_to_file(keyfile, PCAT_MAIN_USER_CONFIG_FILE,
         &error);

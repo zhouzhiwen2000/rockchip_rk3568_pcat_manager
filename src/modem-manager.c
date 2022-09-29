@@ -548,12 +548,15 @@ static inline gboolean pcat_modem_manager_run_external_exec(
 {
     GError *error = NULL;
     gboolean ret = TRUE;
+    PCatManagerUserConfigData *uconfig_data;
 
     if(mm_data==NULL || usb_data==NULL ||
         usb_data->external_control_exec==NULL)
     {
         return FALSE;
     }
+
+    uconfig_data = pcat_main_user_config_data_get();
 
     if(!usb_data->external_control_exec_is_daemon)
     {
@@ -564,10 +567,39 @@ static inline gboolean pcat_modem_manager_run_external_exec(
                 break;
             }
 
-            mm_data->external_control_exec_process = g_subprocess_new(
-                G_SUBPROCESS_FLAGS_STDOUT_PIPE |
-                G_SUBPROCESS_FLAGS_STDERR_MERGE, &error,
-                usb_data->external_control_exec, NULL);
+            if(usb_data->id_vendor==0x2C7C &&
+                uconfig_data->modem_dial_apn!=NULL)
+            {
+                if(uconfig_data->modem_dial_user!=NULL &&
+                    uconfig_data->modem_dial_password!=NULL &&
+                    uconfig_data->modem_dial_auth!=NULL)
+                {
+                    mm_data->external_control_exec_process = g_subprocess_new(
+                        G_SUBPROCESS_FLAGS_STDOUT_PIPE |
+                        G_SUBPROCESS_FLAGS_STDERR_MERGE, &error,
+                        usb_data->external_control_exec, "-s",
+                        uconfig_data->modem_dial_apn,
+                        uconfig_data->modem_dial_user,
+                        uconfig_data->modem_dial_password,
+                        uconfig_data->modem_dial_auth, NULL);
+                }
+                else
+                {
+                    mm_data->external_control_exec_process = g_subprocess_new(
+                        G_SUBPROCESS_FLAGS_STDOUT_PIPE |
+                        G_SUBPROCESS_FLAGS_STDERR_MERGE, &error,
+                        usb_data->external_control_exec, "-s",
+                        uconfig_data->modem_dial_apn, NULL);
+                }
+            }
+            else
+            {
+                mm_data->external_control_exec_process = g_subprocess_new(
+                    G_SUBPROCESS_FLAGS_STDOUT_PIPE |
+                    G_SUBPROCESS_FLAGS_STDERR_MERGE, &error,
+                    usb_data->external_control_exec, NULL);
+            }
+
             if(mm_data->external_control_exec_process==NULL)
             {
                 g_warning("Failed to run external modem control "

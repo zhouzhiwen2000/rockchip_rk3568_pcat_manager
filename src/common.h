@@ -87,6 +87,11 @@ typedef struct _PCatManagerUserConfigData
     GPtrArray *power_schedule_data;
     gboolean charger_on_auto_start;
     guint charger_on_auto_start_timeout;
+
+    gchar *modem_dial_apn;
+    gchar *modem_dial_user;
+    gchar *modem_dial_password;
+    gchar *modem_dial_auth;
 }PCatManagerUserConfigData;
 
 PCatManagerMainConfigData *pcat_main_config_data_get();
