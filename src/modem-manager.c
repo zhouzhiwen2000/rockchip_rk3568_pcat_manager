@@ -625,8 +625,8 @@ static inline gboolean pcat_modem_manager_run_external_exec(
 
                 g_source_set_callback(
                     mm_data->external_control_exec_stdout_read_source,
-                    G_SOURCE_FUNC(
-                    pcat_modem_manager_external_control_exec_stdout_watch_func),
+                    (GSourceFunc)
+                    pcat_modem_manager_external_control_exec_stdout_watch_func,
                     mm_data, NULL);
                 g_source_attach(
                     mm_data->external_control_exec_stdout_read_source, NULL);

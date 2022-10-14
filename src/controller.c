@@ -1,3 +1,4 @@
+#include <string.h>
 #include <glib/gstdio.h>
 #include <gio/gio.h>
 #include <gio/gunixsocketaddress.h>
@@ -199,7 +200,7 @@ static void pcat_controller_unix_socket_output_json_push(
                 G_POLLABLE_OUTPUT_STREAM(connection_data->output_stream),
                 NULL);
             g_source_set_callback(connection_data->output_stream_source,
-                G_SOURCE_FUNC(pcat_controller_unix_socket_output_watch_func),
+                (GSourceFunc)pcat_controller_unix_socket_output_watch_func,
                 connection_data, NULL);
             g_source_attach(connection_data->output_stream_source, NULL);
         }
@@ -220,8 +221,8 @@ static void pcat_controller_unix_socket_output_json_push(
                     G_POLLABLE_OUTPUT_STREAM(connection_data->output_stream),
                     NULL);
                 g_source_set_callback(connection_data->output_stream_source,
-                    G_SOURCE_FUNC(
-                    pcat_controller_unix_socket_output_watch_func),
+                    (GSourceFunc)
+                    pcat_controller_unix_socket_output_watch_func,
                     connection_data, NULL);
                 g_source_attach(connection_data->output_stream_source, NULL);
             }
@@ -370,7 +371,7 @@ static gboolean pcat_controller_unix_socket_incoming_func(
         g_pollable_input_stream_create_source(
         G_POLLABLE_INPUT_STREAM(connection_data->input_stream), NULL);
     g_source_set_callback(connection_data->input_stream_source,
-        G_SOURCE_FUNC(pcat_controller_unix_socket_input_watch_func),
+        (GSourceFunc)pcat_controller_unix_socket_input_watch_func,
         connection_data, NULL);
     g_source_attach(connection_data->input_stream_source, NULL);
 
@@ -405,7 +406,7 @@ static gboolean pcat_controller_unix_socket_connection_check_timeout_func(
                 G_POLLABLE_OUTPUT_STREAM(connection_data->output_stream),
                 NULL);
             g_source_set_callback(connection_data->output_stream_source,
-                G_SOURCE_FUNC(pcat_controller_unix_socket_output_watch_func),
+                (GSourceFunc)pcat_controller_unix_socket_output_watch_func,
                 connection_data, NULL);
             g_source_attach(connection_data->output_stream_source, NULL);
         }
