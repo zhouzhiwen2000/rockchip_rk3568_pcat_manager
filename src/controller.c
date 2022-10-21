@@ -1092,6 +1092,45 @@ static void pcat_controller_command_modem_network_setup_func(
     json_object_put(rroot);
 }
 
+static void pcat_controller_command_modem_network_get_func(
+    PCatControllerData *ctrl_data,
+    PCatControllerConnectionData *connection_data,
+    const gchar *command, struct json_object *root)
+{
+    struct json_object *rroot, *child;
+    const PCatManagerUserConfigData *uconfig_data;
+
+    rroot = json_object_new_object();
+
+    child = json_object_new_string(command);
+    json_object_object_add(rroot, "command", child);
+
+    child = json_object_new_int(0);
+    json_object_object_add(rroot, "code", child);
+
+    uconfig_data = pcat_main_user_config_data_get();
+
+    child = json_object_new_string(uconfig_data->modem_dial_apn!=NULL ?
+        uconfig_data->modem_dial_apn : "");
+    json_object_object_add(rroot, "apn", child);
+
+    child = json_object_new_string(uconfig_data->modem_dial_user!=NULL ?
+        uconfig_data->modem_dial_user : "");
+    json_object_object_add(rroot, "user", child);
+
+    child = json_object_new_string(uconfig_data->modem_dial_password!=NULL ?
+        uconfig_data->modem_dial_password : "");
+    json_object_object_add(rroot, "password", child);
+
+    child = json_object_new_string(uconfig_data->modem_dial_auth!=NULL ?
+        uconfig_data->modem_dial_auth : "");
+    json_object_object_add(rroot, "auth", child);
+
+    pcat_controller_unix_socket_output_json_push(ctrl_data, connection_data,
+        rroot);
+    json_object_put(rroot);
+}
+
 static PCatControllerCommandData g_pcat_controller_command_list[] =
 {
     {
@@ -1133,6 +1172,10 @@ static PCatControllerCommandData g_pcat_controller_command_list[] =
     {
         .command = "modem-network-setup",
         .callback = pcat_controller_command_modem_network_setup_func,
+    },
+    {
+        .command = "modem-network-get",
+        .callback = pcat_controller_command_modem_network_get_func,
     },
     { NULL, NULL }
 };
