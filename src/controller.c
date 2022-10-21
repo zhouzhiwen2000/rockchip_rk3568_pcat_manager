@@ -1021,6 +1021,77 @@ static void pcat_controller_command_modem_rfkill_mode_set_func(
     json_object_put(rroot);
 }
 
+static void pcat_controller_command_modem_network_setup_func(
+    PCatControllerData *ctrl_data,
+    PCatControllerConnectionData *connection_data,
+    const gchar *command, struct json_object *root)
+{
+    struct json_object *rroot, *child;
+    const gchar *apn_str = NULL;
+    const gchar *user_str = NULL;
+    const gchar *password_str = NULL;
+    const gchar *auth_str = NULL;
+    PCatManagerUserConfigData *uconfig_data;
+
+    rroot = json_object_new_object();
+
+    child = json_object_new_string(command);
+    json_object_object_add(rroot, "command", child);
+
+    child = json_object_new_int(0);
+    json_object_object_add(rroot, "code", child);
+
+    if(json_object_object_get_ex(root, "apn", &child))
+    {
+        apn_str = json_object_get_string(child);
+        if(apn_str!=NULL && *apn_str=='\0')
+        {
+            apn_str = NULL;
+        }
+    }
+
+    if(json_object_object_get_ex(root, "user", &child))
+    {
+        user_str = json_object_get_string(child);
+        if(user_str!=NULL && *user_str=='\0')
+        {
+            user_str = NULL;
+        }
+    }
+    if(json_object_object_get_ex(root, "password", &child))
+    {
+        password_str = json_object_get_string(child);
+        if(password_str!=NULL && *password_str=='\0')
+        {
+            password_str = NULL;
+        }
+    }
+    if(json_object_object_get_ex(root, "auth", &child))
+    {
+        auth_str = json_object_get_string(child);
+        if(auth_str!=NULL && *auth_str=='\0')
+        {
+            auth_str = NULL;
+        }
+    }
+
+    uconfig_data = pcat_main_user_config_data_get();
+    g_free(uconfig_data->modem_dial_apn);
+    uconfig_data->modem_dial_apn = g_strdup(apn_str);
+    g_free(uconfig_data->modem_dial_user);
+    uconfig_data->modem_dial_user = g_strdup(user_str);
+    g_free(uconfig_data->modem_dial_password);
+    uconfig_data->modem_dial_password = g_strdup(password_str);
+    g_free(uconfig_data->modem_dial_auth);
+    uconfig_data->modem_dial_auth = g_strdup(auth_str);
+
+    pcat_main_user_config_data_sync();
+
+    pcat_controller_unix_socket_output_json_push(ctrl_data, connection_data,
+        rroot);
+    json_object_put(rroot);
+}
+
 static PCatControllerCommandData g_pcat_controller_command_list[] =
 {
     {
@@ -1058,6 +1129,10 @@ static PCatControllerCommandData g_pcat_controller_command_list[] =
     {
         .command = "modem-rfkill-mode-set",
         .callback = pcat_controller_command_modem_rfkill_mode_set_func,
+    },
+    {
+        .command = "modem-network-setup",
+        .callback = pcat_controller_command_modem_network_setup_func,
     },
     { NULL, NULL }
 };
