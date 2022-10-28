@@ -1085,6 +1085,8 @@ static void pcat_controller_command_modem_network_setup_func(
     g_free(uconfig_data->modem_dial_auth);
     uconfig_data->modem_dial_auth = g_strdup(auth_str);
 
+    uconfig_data->dirty = TRUE;
+
     pcat_main_user_config_data_sync();
 
     pcat_controller_unix_socket_output_json_push(ctrl_data, connection_data,
