@@ -483,7 +483,7 @@ static gboolean pcat_main_user_config_data_load()
         uconfig_data->modem_dial_user = NULL;
     }
 
-    g_free(uconfig_data->modem_dial_user);
+    g_free(uconfig_data->modem_dial_password);
     sv = g_key_file_get_string(keyfile, "Modem", "Password", NULL);
     if(sv!=NULL && *sv!='\0')
     {
