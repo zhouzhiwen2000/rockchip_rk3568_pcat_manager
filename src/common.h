@@ -92,6 +92,7 @@ typedef struct _PCatManagerUserConfigData
     gchar *modem_dial_user;
     gchar *modem_dial_password;
     gchar *modem_dial_auth;
+    gboolean modem_disable_ipv6;
 }PCatManagerUserConfigData;
 
 PCatManagerMainConfigData *pcat_main_config_data_get();

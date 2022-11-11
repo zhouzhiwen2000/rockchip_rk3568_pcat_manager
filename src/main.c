@@ -505,6 +505,9 @@ static gboolean pcat_main_user_config_data_load()
         uconfig_data->modem_dial_auth = NULL;
     }
 
+    uconfig_data->modem_disable_ipv6 = (g_key_file_get_integer(keyfile,
+        "Modem", "DisableIPv6", NULL)!=0);
+
     g_key_file_unref(keyfile);
 
     uconfig_data->valid = TRUE;

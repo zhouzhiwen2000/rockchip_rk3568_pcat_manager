@@ -574,30 +574,67 @@ static inline gboolean pcat_modem_manager_run_external_exec(
                     uconfig_data->modem_dial_password!=NULL &&
                     uconfig_data->modem_dial_auth!=NULL)
                 {
+                    if(!uconfig_data->modem_disable_ipv6)
+                    {
+                        mm_data->external_control_exec_process =
+                            g_subprocess_new(
+                            G_SUBPROCESS_FLAGS_STDOUT_PIPE |
+                            G_SUBPROCESS_FLAGS_STDERR_MERGE, &error,
+                            usb_data->external_control_exec, "-4", "-6", "-s",
+                            uconfig_data->modem_dial_apn,
+                            uconfig_data->modem_dial_user,
+                            uconfig_data->modem_dial_password,
+                            uconfig_data->modem_dial_auth, NULL);
+                    }
+                    else
+                    {
+                        mm_data->external_control_exec_process =
+                            g_subprocess_new(
+                            G_SUBPROCESS_FLAGS_STDOUT_PIPE |
+                            G_SUBPROCESS_FLAGS_STDERR_MERGE, &error,
+                            usb_data->external_control_exec, "-s",
+                            uconfig_data->modem_dial_apn,
+                            uconfig_data->modem_dial_user,
+                            uconfig_data->modem_dial_password,
+                            uconfig_data->modem_dial_auth, NULL);
+                    }
+                }
+                else
+                {
+                    if(!uconfig_data->modem_disable_ipv6)
+                    {
+                        mm_data->external_control_exec_process =
+                            g_subprocess_new(G_SUBPROCESS_FLAGS_STDOUT_PIPE |
+                            G_SUBPROCESS_FLAGS_STDERR_MERGE, &error,
+                            usb_data->external_control_exec, "-4", "-6", "-s",
+                            uconfig_data->modem_dial_apn, NULL);
+                    }
+                    else
+                    {
+                        mm_data->external_control_exec_process =
+                            g_subprocess_new(G_SUBPROCESS_FLAGS_STDOUT_PIPE |
+                            G_SUBPROCESS_FLAGS_STDERR_MERGE, &error,
+                            usb_data->external_control_exec, "-s",
+                            uconfig_data->modem_dial_apn, NULL);
+                    }
+                }
+            }
+            else
+            {
+                if(!uconfig_data->modem_disable_ipv6)
+                {
                     mm_data->external_control_exec_process = g_subprocess_new(
                         G_SUBPROCESS_FLAGS_STDOUT_PIPE |
                         G_SUBPROCESS_FLAGS_STDERR_MERGE, &error,
-                        usb_data->external_control_exec, "-s",
-                        uconfig_data->modem_dial_apn,
-                        uconfig_data->modem_dial_user,
-                        uconfig_data->modem_dial_password,
-                        uconfig_data->modem_dial_auth, NULL);
+                        usb_data->external_control_exec, "-4", "-6", NULL);
                 }
                 else
                 {
                     mm_data->external_control_exec_process = g_subprocess_new(
                         G_SUBPROCESS_FLAGS_STDOUT_PIPE |
                         G_SUBPROCESS_FLAGS_STDERR_MERGE, &error,
-                        usb_data->external_control_exec, "-s",
-                        uconfig_data->modem_dial_apn, NULL);
+                        usb_data->external_control_exec, NULL);
                 }
-            }
-            else
-            {
-                mm_data->external_control_exec_process = g_subprocess_new(
-                    G_SUBPROCESS_FLAGS_STDOUT_PIPE |
-                    G_SUBPROCESS_FLAGS_STDERR_MERGE, &error,
-                    usb_data->external_control_exec, NULL);
             }
 
             if(mm_data->external_control_exec_process==NULL)
