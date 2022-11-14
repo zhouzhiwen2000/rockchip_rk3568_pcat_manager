@@ -997,25 +997,11 @@ gboolean pcat_modem_manager_status_get(PCatModemManagerMode *mode,
     }
     if(isp_name!=NULL)
     {
-        if(g_pcat_modem_manager_data.modem_mode!=PCAT_MODEM_MANAGER_MODE_NONE)
-        {
-            *isp_name = g_strdup(g_pcat_modem_manager_data.isp_name);
-        }
-        else
-        {
-            *isp_name = NULL;
-        }
+        *isp_name = g_strdup(g_pcat_modem_manager_data.isp_name);
     }
     if(isp_plmn!=NULL)
     {
-        if(g_pcat_modem_manager_data.modem_mode!=PCAT_MODEM_MANAGER_MODE_NONE)
-        {
-            *isp_plmn = g_strdup(g_pcat_modem_manager_data.isp_plmn);
-        }
-        else
-        {
-            *isp_plmn = NULL;
-        }
+        *isp_plmn = g_strdup(g_pcat_modem_manager_data.isp_plmn);
     }
 
     return TRUE;
