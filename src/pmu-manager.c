@@ -88,6 +88,7 @@ typedef struct _PCatPMUManagerData
     guint last_charger_voltage;
     gboolean last_on_battery_state;
     guint last_battery_percentage;
+    guint last_battery_percentage_cap;
 
     gchar *pmu_fw_version;
     gint64 charger_on_auto_start_last_timestamp;
@@ -597,6 +598,7 @@ static void pcat_pmu_serial_status_data_parse(PCatPMUManagerData *pmu_data,
     gint64 pmu_unix_time, host_unix_time;
     FILE *fp;
     gdouble battery_percentage;
+    guint battery_percentage_i;
     gboolean on_battery;
     struct timeval tv;
     guint8 board_temp = 0;
@@ -770,9 +772,29 @@ static void pcat_pmu_serial_status_data_parse(PCatPMUManagerData *pmu_data,
     pmu_data->last_battery_voltage = battery_voltage;
     pmu_data->last_charger_voltage = charger_voltage;
     pmu_data->last_on_battery_state = on_battery;
-    pmu_data->last_battery_percentage = battery_percentage * 100;
     pmu_data->board_temp = board_temp;
     pmu_data->board_temp -= 40;
+
+    if(on_battery)
+    {
+        battery_percentage_i = battery_percentage * 100;
+
+        if(battery_percentage_i < pmu_data->last_battery_percentage_cap)
+        {
+            pmu_data->last_battery_percentage_cap = battery_percentage_i;
+            pmu_data->last_battery_percentage = battery_percentage_i;
+        }
+        else
+        {
+            pmu_data->last_battery_percentage =
+                pmu_data->last_battery_percentage_cap;
+        }
+    }
+    else
+    {
+        pmu_data->last_battery_percentage_cap = 10000;
+        pmu_data->last_battery_percentage = battery_percentage * 100;
+    }
 
     fp = fopen(PCAT_PMU_MANAGER_STATEFS_BATTERY_PATH"/ChargePercentage", "w");
     if(fp!=NULL)
@@ -1400,6 +1422,7 @@ gboolean pcat_pmu_manager_init()
         g_get_monotonic_time();
     g_pcat_pmu_manager_data.system_time_set_flag = FALSE;
     g_pcat_pmu_manager_data.power_on_event = 0;
+    g_pcat_pmu_manager_data.last_battery_percentage_cap = 10000;
 
     g_mkdir_with_parents(PCAT_PMU_MANAGER_STATEFS_BATTERY_PATH, 0755);
 
