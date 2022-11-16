@@ -93,6 +93,8 @@ typedef struct _PCatManagerUserConfigData
     gchar *modem_dial_password;
     gchar *modem_dial_auth;
     gboolean modem_disable_ipv6;
+    gboolean modem_disable_5g_fail_auto_reset;
+    guint modem_5g_fail_timeout;
 }PCatManagerUserConfigData;
 
 PCatManagerMainConfigData *pcat_main_config_data_get();

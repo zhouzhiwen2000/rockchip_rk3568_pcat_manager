@@ -58,6 +58,10 @@ typedef struct _PCatModemManagerData
 
     FILE *external_control_exec_stdout_log_file;
     PCatModemManagerDeviceType device_type;
+    gboolean modem_have_5g_connected;
+    gint64 modem_5g_connection_timestamp;
+
+    guint scanning_timeout_id;
 }PCatModemManagerData;
 
 static PCatModemManagerUSBData g_pcat_modem_manager_supported_dev_list[] =
@@ -300,6 +304,8 @@ static inline void pcat_modem_manager_external_control_exec_line_parser(
     gint signal_value;
     gint sim_state;
     gint isp_name_is_ucs2 = 0;
+    PCatModemManagerMode modem_mode;
+    gboolean downgrade_from_5g = FALSE;
 
     if(mm_data->external_control_exec_stdout_log_file!=NULL)
     {
@@ -351,8 +357,32 @@ static inline void pcat_modem_manager_external_control_exec_line_parser(
                     signal_value = 0;
 
                     smode = g_hash_table_lookup(table, "MODE");
-                    mm_data->modem_mode = GPOINTER_TO_UINT(
+                    modem_mode = GPOINTER_TO_UINT(
                         g_hash_table_lookup(mm_data->modem_mode_table, smode));
+
+                    if(modem_mode==PCAT_MODEM_MANAGER_MODE_5G &&
+                       mm_data->modem_mode < PCAT_MODEM_MANAGER_MODE_5G)
+                    {
+                        downgrade_from_5g = TRUE;
+                    }
+
+                    mm_data->modem_mode = modem_mode;
+
+                    if(mm_data->modem_mode==PCAT_MODEM_MANAGER_MODE_5G)
+                    {
+                        mm_data->modem_have_5g_connected = TRUE;
+                        mm_data->modem_5g_connection_timestamp =
+                            g_get_monotonic_time();
+                    }
+                    else
+                    {
+                        if(mm_data->modem_have_5g_connected &&
+                            downgrade_from_5g)
+                        {
+                            mm_data->modem_5g_connection_timestamp =
+                                g_get_monotonic_time();
+                        }
+                    }
 
                     G_STMT_START
                     {
@@ -862,6 +892,33 @@ static gpointer pcat_modem_manager_modem_work_thread_func(
     return NULL;
 }
 
+static gboolean pcat_modem_scan_timeout_func(gpointer user_data)
+{
+    PCatModemManagerData *mm_data = (PCatModemManagerData *)user_data;
+    const PCatManagerUserConfigData *uconfig_data;
+    gint64 now;
+
+    uconfig_data = pcat_main_user_config_data_get();
+    now = g_get_monotonic_time();
+
+    if(!uconfig_data->modem_disable_5g_fail_auto_reset)
+    {
+        if(mm_data->modem_have_5g_connected && !mm_data->modem_rfkill_state)
+        {
+            if(now > mm_data->modem_5g_connection_timestamp +
+                uconfig_data->modem_5g_fail_timeout * 1e6)
+            {
+                pcat_modem_manager_device_rfkill_mode_set(TRUE);
+                pcat_modem_manager_device_rfkill_mode_set(FALSE);
+
+                mm_data->modem_have_5g_connected = FALSE;
+            }
+        }
+    }
+
+    return TRUE;
+}
+
 gboolean pcat_modem_manager_init()
 {
     int errcode;
@@ -923,6 +980,9 @@ gboolean pcat_modem_manager_init()
     g_spawn_async(NULL, command, NULL, G_SPAWN_DEFAULT,
         NULL, NULL, NULL, NULL);
 
+    g_pcat_modem_manager_data.scanning_timeout_id = g_timeout_add_seconds(5,
+        pcat_modem_scan_timeout_func, &g_pcat_modem_manager_data);
+
     g_pcat_modem_manager_data.initialized = TRUE;
 
     return TRUE;
@@ -933,6 +993,12 @@ void pcat_modem_manager_uninit()
     if(!g_pcat_modem_manager_data.initialized)
     {
         return;
+    }
+
+    if(g_pcat_modem_manager_data.scanning_timeout_id > 0)
+    {
+        g_source_remove(g_pcat_modem_manager_data.scanning_timeout_id);
+        g_pcat_modem_manager_data.scanning_timeout_id = 0;
     }
 
     g_pcat_modem_manager_data.work_flag = FALSE;

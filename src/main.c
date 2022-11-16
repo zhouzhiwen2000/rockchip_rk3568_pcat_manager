@@ -508,6 +508,17 @@ static gboolean pcat_main_user_config_data_load()
     uconfig_data->modem_disable_ipv6 = (g_key_file_get_integer(keyfile,
         "Modem", "DisableIPv6", NULL)!=0);
 
+    uconfig_data->modem_disable_5g_fail_auto_reset =
+        (g_key_file_get_integer(keyfile, "Modem",
+        "Disable5GFailAutoReset", NULL)!=0);
+    uconfig_data->modem_5g_fail_timeout = g_key_file_get_integer(
+        keyfile, "Modem", "Connection5GFailTimeout", NULL);
+
+    if(uconfig_data->modem_5g_fail_timeout < 60)
+    {
+        uconfig_data->modem_5g_fail_timeout = 600;
+    }
+
     g_key_file_unref(keyfile);
 
     uconfig_data->valid = TRUE;
@@ -588,6 +599,13 @@ static gboolean pcat_main_user_config_data_save()
         g_key_file_set_string(keyfile, "Modem", "Auth",
             uconfig_data->modem_dial_auth);
     }
+
+    g_key_file_set_integer(keyfile, "Modem", "DisableIPv6",
+        uconfig_data->modem_disable_ipv6 ? 1 : 0);
+    g_key_file_set_integer(keyfile, "Modem", "Disable5GFailAutoReset",
+        uconfig_data->modem_disable_5g_fail_auto_reset ? 1 : 0);
+    g_key_file_set_integer(keyfile, "Modem", "Connection5GFailTimeout",
+        uconfig_data->modem_5g_fail_timeout);
 
     ret = g_key_file_save_to_file(keyfile, PCAT_MAIN_USER_CONFIG_FILE,
         &error);
