@@ -1032,6 +1032,7 @@ static void pcat_controller_command_modem_network_setup_func(
     const gchar *password_str = NULL;
     const gchar *auth_str = NULL;
     PCatManagerUserConfigData *uconfig_data;
+    gboolean disable_5g_fail_auto_reset = FALSE;
 
     rroot = json_object_new_object();
 
@@ -1074,6 +1075,11 @@ static void pcat_controller_command_modem_network_setup_func(
             auth_str = NULL;
         }
     }
+    if(json_object_object_get_ex(root, "connection-5g-fail-auto-reset",
+        &child))
+    {
+        disable_5g_fail_auto_reset = (json_object_get_int(child)!=0);
+    }
 
     uconfig_data = pcat_main_user_config_data_get();
     g_free(uconfig_data->modem_dial_apn);
@@ -1084,6 +1090,8 @@ static void pcat_controller_command_modem_network_setup_func(
     uconfig_data->modem_dial_password = g_strdup(password_str);
     g_free(uconfig_data->modem_dial_auth);
     uconfig_data->modem_dial_auth = g_strdup(auth_str);
+    uconfig_data->modem_disable_5g_fail_auto_reset =
+        disable_5g_fail_auto_reset;
 
     uconfig_data->dirty = TRUE;
 
@@ -1127,6 +1135,10 @@ static void pcat_controller_command_modem_network_get_func(
     child = json_object_new_string(uconfig_data->modem_dial_auth!=NULL ?
         uconfig_data->modem_dial_auth : "");
     json_object_object_add(rroot, "auth", child);
+
+    child = json_object_new_int(uconfig_data->modem_disable_5g_fail_auto_reset
+        ? 1 : 0);
+    json_object_object_add(rroot, "connection-5g-fail-auto-reset", child);
 
     pcat_controller_unix_socket_output_json_push(ctrl_data, connection_data,
         rroot);
