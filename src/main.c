@@ -1080,8 +1080,8 @@ static void *pcat_main_mwan_policy_check_thread_func(void *user_data)
             mwan3_interface_check_timestamp +
             PCAT_MAIN_MWAN_STATUS_CHECK_TIMEOUT * 1000000L)
         {
-            g_spawn_command_line_sync("mwan3 restart", NULL,
-                NULL, NULL, NULL);
+//            g_spawn_command_line_sync("mwan3 restart", NULL,
+//                NULL, NULL, NULL);
 
             mwan3_interface_check_timestamp = g_get_monotonic_time();
 
